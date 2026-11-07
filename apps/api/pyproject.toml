@@ -1,0 +1,36 @@
+[project]
+name = "croplens-api"
+version = "0.1.0"
+description = "CropLens Agricultural Dataset Intelligence Platform Backend API"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "python-dotenv>=1.0.1",
+    "python-multipart>=0.0.9",
+    "pillow>=10.2.0",
+    "imagehash>=4.3.1",
+    "numpy>=1.26.0",
+    "duckdb>=1.0.0",
+    "pyarrow>=15.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+]
+analysis = [
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "pillow>=10.2.0",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test_*.py"]

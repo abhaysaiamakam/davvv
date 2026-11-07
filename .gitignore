@@ -1,0 +1,68 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.pnp
+.pnp.js
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+.eslintcache
+*.tsbuildinfo
+
+# Storage runtime data
+storage_data/
+apps/api/storage_data/
+data/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+

@@ -1,0 +1,8 @@
+{
+  "name": "CropLens",
+  "description": "Interactive agricultural dataset intelligence, EDA, quality validation, and data preprocessing platform for NIErnaya Phase 2.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

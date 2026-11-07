@@ -1,0 +1,21 @@
+{
+  "name": "croplens",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=apps/web",
+    "lint": "npm run lint --workspace=apps/web",
+    "dev": "npm run dev --workspace=apps/web",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:web": "npm run build --workspace=apps/web",
+    "lint:web": "npm run lint --workspace=apps/web",
+    "type-check:web": "npm run type-check --workspace=apps/web",
+    "dev:api": "bash scripts/dev-backend.sh",
+    "test:api": "bash scripts/test-backend.sh"
+  }
+}
+
