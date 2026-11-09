@@ -8,6 +8,8 @@ and pipeline re-analysis integration.
 from __future__ import annotations
 
 import csv
+import hashlib
+import time
 from pathlib import Path
 import pytest
 from fastapi import status
@@ -59,7 +61,8 @@ def test_get_available_features(client: TestClient, sample_tabular_fe_dataset):
 
 
 def test_mathematical_transform_preview_and_apply(client: TestClient, sample_tabular_fe_dataset):
-    ds_id, _ = sample_tabular_fe_dataset
+    ds_id, source_dir = sample_tabular_fe_dataset
+    original_hash = hashlib.sha256((source_dir / "features_data.csv").read_bytes()).hexdigest()
 
     preview_req = {
         "dataset_id": ds_id,
@@ -95,6 +98,24 @@ def test_mathematical_transform_preview_and_apply(client: TestClient, sample_tab
     apply_data = apply_resp.json()
     assert apply_data["status"] == "completed"
     assert apply_data["new_features_count"] == 1
+    assert apply_data["derived_version_id"]
+    assert apply_data["job_id"]
+    job_resp = client.get(f"/api/v1/jobs/{apply_data['job_id']}")
+    assert job_resp.status_code == status.HTTP_200_OK
+    assert job_resp.json()["dataset_version"] == apply_data["derived_version_id"]
+    deadline = time.monotonic() + 5
+    while job_resp.json()["status"] not in ("completed", "failed") and time.monotonic() < deadline:
+        time.sleep(0.02)
+        job_resp = client.get(f"/api/v1/jobs/{apply_data['job_id']}")
+    assert job_resp.json()["status"] == "completed", job_resp.json()
+    from app.services.dataset_service import dataset_service
+    assert dataset_service.get_version(ds_id, apply_data["derived_version_id"]).status.value == "ready"
+    assert dataset_service.get_version(ds_id, apply_data["source_version_id"]).status.value == "registered"
+    from app.services.data_quality_service import data_quality_service
+    from app.services.eda_service import eda_service
+    assert data_quality_service.get_latest_assessment_for_dataset(ds_id, apply_data["derived_version_id"]).version_id == apply_data["derived_version_id"]
+    assert eda_service.get_latest_report_for_dataset(ds_id, apply_data["derived_version_id"]).version_id == apply_data["derived_version_id"]
+    assert hashlib.sha256((source_dir / "features_data.csv").read_bytes()).hexdigest() == original_hash
 
 
 def test_variance_threshold_and_pca(client: TestClient, sample_tabular_fe_dataset):

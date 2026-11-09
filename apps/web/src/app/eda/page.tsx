@@ -30,7 +30,7 @@ export default function EDAPage() {
   const load = useCallback(async () => {
     if (!ctx.selectedId) return;
     setLoading(true); setError(null);
-    const [eda, visualizations] = await Promise.allSettled([apiClient.getEda(ctx.selectedId), apiClient.getVisualizations(ctx.selectedId, version.versionId || undefined)]);
+    const [eda, visualizations] = await Promise.allSettled([apiClient.getEda(ctx.selectedId, version.versionId || undefined), apiClient.getVisualizations(ctx.selectedId, version.versionId || undefined)]);
     if (eda.status === "fulfilled") setReport(eda.value); else setReport(null);
     if (visualizations.status === "fulfilled") setCharts(visualizations.value); else setCharts(null);
     const reasons = [eda.status === "rejected" && !(eda.reason instanceof ApiClientError && eda.reason.status === 404) ? eda.reason : null, visualizations.status === "rejected" && !(visualizations.reason instanceof ApiClientError && visualizations.reason.status === 404) ? visualizations.reason : null].filter(Boolean);
@@ -42,7 +42,7 @@ export default function EDAPage() {
     if (!ctx.selectedId) return;
     setRunning(true); setError(null);
     try {
-      setReport(await apiClient.runEda(ctx.selectedId));
+      setReport(await apiClient.runEda(ctx.selectedId, version.versionId || undefined));
       setCharts(await apiClient.getVisualizations(ctx.selectedId, version.versionId || undefined));
     } catch (issue) { setError(issue instanceof Error ? issue.message : "EDA run failed."); }
     finally { setRunning(false); }
@@ -51,8 +51,9 @@ export default function EDAPage() {
     {ctx.error && <ErrorState title="Dataset registry unavailable" message={ctx.error} onRetry={() => void ctx.reload()}/>}
     {error && <ErrorState title="EDA data unavailable" message={error} onRetry={() => void load()}/>}
     {loading ? <LoadingState label="Loading dataset analysis and chart specifications…"/> : report ? <>
-      <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs leading-relaxed text-blue-950"><span className="font-semibold">Artifact scope:</span> the EDA report endpoint returns the latest dataset-level report and does not include a version ID. Each visualization below includes its own dataset version. CropLens keeps those provenance labels separate.</div>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Valid images",report.overview.total_valid_images],["Classes",report.overview.class_count],["Files",report.overview.total_discovered_files],["EDA findings",report.findings.length]].map(([label,value])=><div key={String(label)} className="rounded-xl border border-croplens-border bg-white p-4"><p className="text-xs text-zinc-400">{label}</p><p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p></div>)}</section>
+      <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs leading-relaxed text-blue-950"><span className="font-semibold">Artifact scope:</span> report {report.version_id ?? "version unknown"} · selected version {version.versionId ?? "none"}</div>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{(report.modality === "tabular" ? [["Rows",report.tabular_summary?.row_count ?? "—"],["Columns",report.tabular_summary?.column_count ?? "—"],["Missing cells",report.tabular_summary?.missing_cell_count ?? "—"],["Files",report.tabular_summary?.files.length ?? "—"]] : [["Valid images",report.overview.total_valid_images ?? "—"],["Classes",report.overview.class_count ?? "—"],["Files",report.overview.total_discovered_files ?? "—"],["EDA findings",report.findings.length]]).map(([label,value])=><div key={String(label)} className="rounded-xl border border-croplens-border bg-white p-4"><p className="text-xs text-zinc-400">{label}</p><p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p></div>)}</section>
+      {report.modality === "tabular" && report.tabular_summary && <DashboardCard title="Tabular file summaries" icon={<BarChart3 size={17}/>} description="Counts and missing cells are calculated from the selected version's source files."><div className="space-y-4">{report.tabular_summary.files.map((file)=><section key={file.file} className="rounded-lg border border-croplens-border p-3"><h3 className="text-sm font-semibold">{file.file} · {file.row_count} rows × {file.column_count} columns</h3><div className="mt-2 flex flex-wrap gap-2">{Object.entries(file.missing_by_column).filter(([,count])=>count>0).map(([column,count])=><span key={column} className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">{column}: {count} missing</span>)}</div></section>)}</div></DashboardCard>}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400"><span>{report.dataset_name} · analysis {report.id}</span><span>Generated {formatDate(report.completed_at ?? report.created_at)} · {report.methodology_version}</span></div>
       <section className="grid gap-5 lg:grid-cols-2">{charts?.items.length ? charts.items.map((spec)=>{
         const explanationId=spec.category==="class_distribution"?"eda.class_distribution":spec.category==="image_geometry"?"eda.dimensions":spec.category==="format_and_color"?"eda.color":spec.category==="tabular_distribution"?"eda.tabular":null;

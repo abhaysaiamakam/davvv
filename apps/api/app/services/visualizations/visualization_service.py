@@ -82,25 +82,33 @@ class VisualizationService:
 
         # Upstream M2 analysis
         try:
-            context["analysis"] = analysis_service.get_latest_analysis_for_dataset(dataset_id)
+            context["analysis"] = analysis_service.get_latest_analysis_for_dataset(dataset_id, ver)
         except Exception:
             context["analysis"] = None
 
         # Upstream M3 quality assessment
         try:
-            context["quality"] = data_quality_service.get_latest_assessment_for_dataset(dataset_id)
+            context["quality"] = data_quality_service.get_latest_assessment_for_dataset(dataset_id, ver)
         except Exception:
             context["quality"] = None
 
         # Upstream M4 EDA report
         try:
-            context["eda"] = eda_service.get_latest_report_for_dataset(dataset_id)
+            context["eda"] = eda_service.get_latest_report_for_dataset(dataset_id, ver)
         except Exception:
             context["eda"] = None
 
         # Resolve dataset directory for file-based visualizers (tabular, annotations)
         try:
-            resolved_path = self.storage.resolve_dataset_path(dataset)
+            if dataset.is_curated:
+                resolved_path = self.storage.get_curated_path(dataset.slug)
+            else:
+                version_record = self.storage.load_dataset_version(dataset_id, ver)
+                if not version_record or not version_record.get("storage_relative_path"):
+                    raise FileNotFoundError(f"Dataset version {ver} has no registered storage path")
+                resolved_path = (self.storage.base_dir / version_record["storage_relative_path"]).resolve()
+                if not self.storage.is_safe_path(resolved_path):
+                    raise ValueError("Selected dataset version path is outside storage")
             if resolved_path and resolved_path.exists():
                 context["dataset_dir"] = resolved_path
         except Exception:

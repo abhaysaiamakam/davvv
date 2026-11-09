@@ -12,6 +12,7 @@ from app.schemas.dataset import (
     ImageValidationRecord,
     ValidationStatus,
 )
+from app.core.config import Settings
 from app.services.duplicate_detection_service import (
     DuplicateDetectionService,
     duplicate_detection_service,
@@ -21,8 +22,7 @@ from app.storage.local import LocalStorageBackend
 
 @pytest.fixture
 def temp_storage(tmp_path: Path):
-    backend = LocalStorageBackend()
-    backend.base_path = tmp_path
+    backend = LocalStorageBackend(Settings(STORAGE_BASE_DIR=tmp_path, ENVIRONMENT="testing", DEBUG=True))
     backend.initialize()
     return backend, tmp_path
 
@@ -173,6 +173,35 @@ def test_duplicate_grouping_two_and_three_members(temp_storage):
     assert duplicate_paths == ["Rice/blast/img_m.jpg", "Rice/blast/img_z.jpg"]
     assert all(d.is_representative is False for d in group.duplicates)
     assert group.is_cross_class is False
+
+
+def test_uploaded_duplicate_hashing_uses_exact_version_root(temp_storage):
+    backend, _ = temp_storage
+    dataset_id = "version-root-duplicates"
+    version_id = "ver-version-root-duplicates-2-deadbeef"
+    version_root = backend.get_extract_path(dataset_id) / "v2"
+    cls = version_root / "class-a"
+    cls.mkdir(parents=True)
+    payload = b"same bytes in selected version"
+    (cls / "a.jpg").write_bytes(payload)
+    (cls / "b.jpg").write_bytes(payload)
+    version_rel = backend.sanitize_relative_path(version_root)
+    backend.save_dataset_version(dataset_id, version_id, {"version_id": version_id, "storage_relative_path": version_rel})
+    records = [ImageValidationRecord(relative_path=f"class-a/{name}.jpg", file_size_bytes=len(payload), status=ValidationStatus.VALID) for name in ("a", "b")]
+    validation = DatasetValidationResult(dataset_id=dataset_id, dataset_name=dataset_id,
+        dataset_source=DatasetSource.EVALUATOR_UPLOAD, validation_status=DatasetStatus.VALIDATED,
+        total_discovered_images=2, total_validated_images=2, total_corrupted_images=0,
+        total_unreadable_images=0, total_processing_errors=0, total_unsupported_files=0,
+        validation_timestamp="2026-11-09T00:00:00Z", images=records, warnings=[])
+    dataset = DatasetMetadata(id=dataset_id, name=dataset_id, slug=dataset_id,
+        description="version-specific duplicate fixture", source=DatasetSource.EVALUATOR_UPLOAD,
+        created_at="2026-11-09T00:00:00Z", updated_at="2026-11-09T00:00:00Z",
+        crops=[], is_curated=False, is_uploaded=True, status=DatasetStatus.VALIDATED,
+        current_version_id=version_id, validation=validation)
+    result = DuplicateDetectionService().detect_duplicates(dataset, backend, version_id=version_id)
+    assert result.version_id == version_id
+    assert result.exact_duplicate_groups == 1
+    assert result.hashing_failures == 0
 
 
 def test_cross_class_duplicate_detection(temp_storage):

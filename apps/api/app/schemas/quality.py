@@ -33,6 +33,8 @@ class QualityFinding(BaseModel):
     threshold_used: Optional[str] = Field(default=None, description="Explicit rule or threshold applied")
     affected_classes: List[str] = Field(default_factory=list, description="Class identifiers affected by this finding")
     affected_image_samples: List[str] = Field(default_factory=list, description="Sample relative paths of affected files")
+    affected_columns: List[str] = Field(default_factory=list, description="Tabular columns supporting a finding")
+    missing_value_samples: List[Dict[str, Any]] = Field(default_factory=list, description="Bounded tabular row and cell evidence")
     recommended_action: str = Field(..., description="Evidence-backed cleaning or curation recommendation")
     evidence_references: List[str] = Field(default_factory=list, description="References to supporting M2 metrics or records")
     methodology_version: str = Field(default="v1.0", description="Assessment methodology version")
@@ -52,8 +54,8 @@ class ImageIntegrityAssessment(BaseModel):
 
 
 class ClassImbalanceAssessment(BaseModel):
-    total_classes: int = Field(..., description="Total class directories discovered")
-    classes_with_images: int = Field(..., description="Classes containing at least 1 image")
+    total_classes: Optional[int] = Field(default=None, description="Total class directories discovered, or null when not applicable")
+    classes_with_images: Optional[int] = Field(default=None, description="Classes containing at least 1 image, or null when not applicable")
     empty_classes: List[str] = Field(default_factory=list, description="Classes containing zero images")
     min_class_count: Optional[int] = Field(default=None, description="Minimum image count among non-empty classes")
     max_class_count: Optional[int] = Field(default=None, description="Maximum image count among classes")
@@ -62,7 +64,7 @@ class ClassImbalanceAssessment(BaseModel):
     std_class_count: Optional[float] = Field(default=None, description="Sample standard deviation of class counts")
     imbalance_ratio: Optional[float] = Field(default=None, description="Max class count / Min class count (null if min is 0 or undefined)")
     coefficient_of_variation: Optional[float] = Field(default=None, description="std_dev / mean (dispersion index)")
-    imbalance_severity: str = Field(..., description="Categorical assessment ('balanced', 'moderately_imbalanced', 'severely_imbalanced', 'undefined')")
+    imbalance_severity: str = Field(..., description="Categorical assessment, including 'not_applicable'")
     underrepresented_classes: List[Dict[str, Any]] = Field(default_factory=list, description="Classes with counts significantly below average")
     overrepresented_classes: List[Dict[str, Any]] = Field(default_factory=list, description="Classes with counts significantly above average")
     class_distribution: Dict[str, int] = Field(default_factory=dict, description="Image count per discovered class")
@@ -83,8 +85,8 @@ class MetadataConsistencyAssessment(BaseModel):
     mean_aspect_ratio: Optional[float] = Field(default=None, description="Mean aspect ratio")
     format_distribution: Dict[str, int] = Field(default_factory=dict, description="Distribution of image formats (e.g. JPEG, PNG, MPO)")
     color_mode_distribution: Dict[str, int] = Field(default_factory=dict, description="Distribution of color modes (e.g. RGB, L)")
-    aspect_ratio_outliers_count: int = Field(default=0, description="Count of images with unusual aspect ratios (< 0.5 or > 2.2)")
-    small_dimension_images_count: int = Field(default=0, description="Images with width or height < 224px")
+    aspect_ratio_outliers_count: Optional[int] = Field(default=None, description="Count of images with unusual aspect ratios, or null when not applicable")
+    small_dimension_images_count: Optional[int] = Field(default=None, description="Images with width or height < 224px, or null when not applicable")
     consistency_rate: Optional[float] = Field(default=None, description="Percentage of images meeting standard consistency boundaries")
     is_available: bool = Field(default=True, description="Whether metadata consistency could be evaluated")
     evaluation_notes: List[str] = Field(default_factory=list, description="Consistency rules and observations")
@@ -102,7 +104,7 @@ class DuplicateImpactAssessment(BaseModel):
     total_redundant_images: Optional[int] = Field(default=None, description="Combined non-redundant redundant instances (exact + near, no double counting)")
     clean_unique_images: Optional[int] = Field(default=None, description="Net unique images remaining after deduplication")
     duplicate_impact_severity: str = Field(..., description="Duplicate impact classification ('none', 'low', 'moderate', 'severe', 'uncomputed')")
-    classes_affected_count: int = Field(default=0, description="Number of classes with detected duplicates")
+    classes_affected_count: Optional[int] = Field(default=None, description="Number of classes with detected duplicates, or null when not applicable")
     class_duplicate_breakdown: Dict[str, int] = Field(default_factory=dict, description="Redundant instances per class")
     is_available: bool = Field(default=True, description="Whether duplicate impact could be evaluated")
     evaluation_notes: List[str] = Field(default_factory=list, description="Deduplication semantics and safety notes")
@@ -118,8 +120,8 @@ class QualityScoreComponent(BaseModel):
 
 
 class TransparentQualityScore(BaseModel):
-    overall_score: float = Field(..., ge=0.0, le=100.0, description="Weighted composite dataset quality score [0.0 - 100.0]")
-    quality_tier: str = Field(..., description="Overall quality classification ('excellent', 'good', 'fair', 'poor', 'critical')")
+    overall_score: Optional[float] = Field(default=None, ge=0.0, le=100.0, description="Weighted composite score, null when the image-only score does not apply")
+    quality_tier: str = Field(..., description="Overall quality classification, or 'not_applicable'")
     methodology_version: str = Field(default="v1.0", description="Quality scoring methodology version")
     components: Dict[str, QualityScoreComponent] = Field(..., description="Breakdown of individual score components")
     weight_configuration: Dict[str, float] = Field(..., description="Weights applied across components (sums to 1.0)")
@@ -131,6 +133,7 @@ class DataQualityAssessment(BaseModel):
     id: str = Field(..., description="Unique assessment identifier (e.g. qa-icar-rice-maize-uuid)")
     dataset_id: str = Field(..., description="Associated dataset identifier")
     dataset_name: str = Field(..., description="Human-readable dataset display name")
+    modality: str = Field(default="image", description="Selected dataset version modality")
     version_id: Optional[str] = Field(default=None, description="Dataset version snapshot used for this assessment")
     source_analysis_id: Optional[str] = Field(default=None, description="Analysis job ID from M2.5 that provided the base data")
     status: AnalysisStatus = Field(default=AnalysisStatus.COMPLETED, description="Assessment execution status")

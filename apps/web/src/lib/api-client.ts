@@ -89,7 +89,7 @@ export const apiClient = {
   previewImagePreprocessing: (datasetId: string, versionId: string, imageId: string, operation: ImagePreviewOperation) => request<ImagePreprocessingPreviewResponse>(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/images/${encodeURIComponent(imageId)}/preprocessing-preview`, json({ operation: { ...operation, modality: "image" } })),
   discoverDataset: (id: string) => request<DatasetDiscoveryResult>(`/datasets/${encodeURIComponent(id)}/discover`, { method: "POST" }),
   validateDataset: (id: string) => request<NonNullable<DatasetMetadata["validation"]>>(`/datasets/${encodeURIComponent(id)}/validate`, { method: "POST" }),
-  detectDuplicates: (id: string) => request<NonNullable<DatasetMetadata["duplicates"]>>(`/datasets/${encodeURIComponent(id)}/duplicates/detect`, { method: "POST" }),
+  detectDuplicates: (id: string, version?: string) => request<NonNullable<DatasetMetadata["duplicates"]>>(`/datasets/${encodeURIComponent(id)}/duplicates/detect${version ? `?version_id=${encodeURIComponent(version)}` : ""}`, { method: "POST" }),
   detectNearDuplicates: (id: string) => request<NearDuplicateAnalysisResult>(`/datasets/${encodeURIComponent(id)}/near-duplicates/detect`, json({})),
   getNearDuplicates: (id: string) => request<NearDuplicateAnalysisResult>(`/datasets/${encodeURIComponent(id)}/near-duplicates`),
   uploadDataset: (file: File, name?: string, datasetId?: string, onProgress?: (percent: number) => void) => {
@@ -119,10 +119,10 @@ export const apiClient = {
   listJobs: () => request<JobListResponse>("/jobs"),
   getJob: (id: string) => request<ProcessingJob>(`/jobs/${encodeURIComponent(id)}`),
   retryJob: (id: string) => request<ProcessingJob>(`/jobs/${encodeURIComponent(id)}/retry`, { method: "POST" }),
-  assessQuality: (id: string) => request<DataQualityAssessment>(`/datasets/${encodeURIComponent(id)}/quality-assessments`, { method: "POST" }),
-  getQuality: (id: string) => request<DataQualityAssessment>(`/datasets/${encodeURIComponent(id)}/quality-assessment`),
-  runEda: (id: string) => request<EdaReport>(`/datasets/${encodeURIComponent(id)}/eda`, { method: "POST" }),
-  getEda: (id: string) => request<EdaReport>(`/datasets/${encodeURIComponent(id)}/eda`),
+  assessQuality: (id: string, version?: string) => request<DataQualityAssessment>(`/datasets/${encodeURIComponent(id)}/quality-assessments${version ? `?version_id=${encodeURIComponent(version)}` : ""}`, { method: "POST" }),
+  getQuality: (id: string, version?: string) => request<DataQualityAssessment>(`/datasets/${encodeURIComponent(id)}/quality-assessment${version ? `?version_id=${encodeURIComponent(version)}` : ""}`),
+  runEda: (id: string, version?: string) => request<EdaReport>(`/datasets/${encodeURIComponent(id)}/eda${version ? `?version_id=${encodeURIComponent(version)}` : ""}`, { method: "POST" }),
+  getEda: (id: string, version?: string) => request<EdaReport>(`/datasets/${encodeURIComponent(id)}/eda${version ? `?version_id=${encodeURIComponent(version)}` : ""}`),
   getVisualizations: (id: string, version?: string) => request<VisualizationCollectionResponse>(version
     ? `/datasets/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/visualizations`
     : `/datasets/${encodeURIComponent(id)}/visualizations`),

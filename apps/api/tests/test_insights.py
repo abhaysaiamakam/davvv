@@ -69,6 +69,7 @@ from app.services.insights import (
     insights_service,
 )
 from app.services.job_service import job_service
+from app.services.tabular_values import is_missing_value, missing_representation
 from app.storage.local import storage_backend
 
 
@@ -434,15 +435,35 @@ def test_tabular_insights_missing_values(tmp_path):
     assert score.missing_value_samples[0]["row"]["score"] == ""
 
 
+def test_tabular_insights_reports_low_missing_counts(tmp_path):
+    csv_path = tmp_path / "low-missing.csv"
+    csv_path.write_text("id,score\n" + "1,\n" + "".join(f"{i},90\n" for i in range(2, 101)), encoding="utf-8")
+    analyzer = TabularInsightAnalyzer()
+    findings = analyzer.analyze("tab_ds", "v1", {"dataset_dir": tmp_path})
+    missing = next(item for item in findings if item.category == InsightCategory.MISSING_VALUES)
+    assert missing.severity == InsightSeverity.LOW
+    assert missing.affected_columns == ["score"]
+    count_evidence = next(item for item in missing.evidence if item.metric == "missing_value_count")
+    assert count_evidence.value == 1
+
+
 def test_tabular_missing_values_distinguishes_short_row_null_from_empty(tmp_path):
     csv_path = tmp_path / "nulls.csv"
-    csv_path.write_text("id,score,note\n1,,known\n2,\n3,1,known\n" + "4,,known\n" * 18, encoding="utf-8")
+    csv_path.write_text("id,score,note\n1,,known\n2\n3,1,known\n" + "4,,known\n" * 18, encoding="utf-8")
     analyzer = TabularInsightAnalyzer()
     insight = next(item for item in analyzer.analyze("tab_ds", "v1", {"dataset_dir": tmp_path}) if item.category == InsightCategory.MISSING_VALUES and "score" in item.affected_columns)
     by_position = {sample["source_row_position"]: sample for sample in insight.missing_value_samples}
     assert by_position[1]["missing_representation"] == "empty_string"
     assert by_position[2]["missing_representation"] == "null"
     assert by_position[2]["row"]["note"] is None
+
+
+def test_shared_tabular_missing_semantics_for_explicit_null_and_whitespace():
+    values = ["", None, "NULL", "   ", "0"]
+    assert [is_missing_value(value) for value in values] == [True, True, True, True, False]
+    assert [missing_representation(value) for value in values[:4]] == [
+        "empty_string", "null", "explicit_null", "whitespace"
+    ]
 
 
 def test_tabular_insights_constant_columns(tmp_path):

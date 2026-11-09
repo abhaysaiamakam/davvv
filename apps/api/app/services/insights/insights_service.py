@@ -90,7 +90,7 @@ class InsightsService:
         source_eda_id: Optional[str] = None
 
         try:
-            analysis = analysis_service.get_latest_analysis_for_dataset(dataset_id)
+            analysis = analysis_service.get_latest_analysis_for_dataset(dataset_id, ver)
             context["analysis"] = analysis
             if analysis:
                 source_analysis_id = analysis.id
@@ -98,7 +98,7 @@ class InsightsService:
             context["analysis"] = None
 
         try:
-            quality = data_quality_service.get_latest_assessment_for_dataset(dataset_id)
+            quality = data_quality_service.get_latest_assessment_for_dataset(dataset_id, ver)
             context["quality"] = quality
             if quality:
                 source_quality_id = quality.id
@@ -106,7 +106,7 @@ class InsightsService:
             context["quality"] = None
 
         try:
-            eda = eda_service.get_latest_report_for_dataset(dataset_id)
+            eda = eda_service.get_latest_report_for_dataset(dataset_id, ver)
             context["eda"] = eda
             if eda:
                 source_eda_id = eda.id
@@ -121,7 +121,15 @@ class InsightsService:
 
         # Resolve dataset directory for file-based analyzers
         try:
-            resolved_path = self.storage.resolve_dataset_path(dataset)
+            if dataset.is_curated:
+                resolved_path = self.storage.get_curated_path(dataset.slug)
+            else:
+                version_record = self.storage.load_dataset_version(dataset_id, ver)
+                if not version_record or not version_record.get("storage_relative_path"):
+                    raise FileNotFoundError(f"Dataset version {ver} has no registered storage path")
+                resolved_path = (self.storage.base_dir / version_record["storage_relative_path"]).resolve()
+                if not self.storage.is_safe_path(resolved_path):
+                    raise ValueError("Selected dataset version path is outside storage")
             if resolved_path and resolved_path.exists():
                 context["dataset_dir"] = resolved_path
         except Exception:

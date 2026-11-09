@@ -139,22 +139,38 @@ class EdaService:
         from app.services.data_quality_service import data_quality_service
 
         dataset = dataset_service.get_dataset(dataset_id)
+        from app.services.preprocessing.preprocessing_registry import preprocessing_registry
+        try:
+            dataset_root = self._storage.resolve_dataset_path(dataset)
+            modalities = {item.value for item in preprocessing_registry.detect_modalities(dataset_root)}
+        except Exception:
+            dataset_root = None
+            modalities = set()
+        if "image" not in modalities and "tabular" in modalities:
+            return self._run_tabular_eda(dataset, dataset_root)
+        selected_version_id = dataset.current_version_id if dataset else None
 
         # Return cached report unless forced
         if not force_refresh:
-            existing = self.get_latest_report_for_dataset(dataset_id)
+            existing = self.get_latest_report_for_dataset(dataset_id, dataset.current_version_id)
             if existing and existing.status == EdaStatus.COMPLETED:
                 return existing
 
         # Retrieve or compute unified analysis (M2)
-        analysis = analysis_service.get_latest_analysis_for_dataset(dataset_id)
+        try:
+            analysis = analysis_service.get_latest_analysis_for_dataset(dataset_id, selected_version_id)
+        except TypeError:
+            analysis = analysis_service.get_latest_analysis_for_dataset(dataset_id)
         if analysis is None:
             analysis = analysis_service.run_analysis(dataset_id)
 
         # Quality assessment (optional — do not fail if absent)
         quality_assessment = None
         try:
-            quality_assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id)
+            try:
+                quality_assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id, selected_version_id)
+            except TypeError:
+                quality_assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id)
         except Exception:
             pass
 
@@ -182,7 +198,7 @@ class EdaService:
         total_size = sum(img.file_size_bytes or 0 for img in valid_images)
         overview = DatasetOverview(
             dataset_id=dataset_id,
-            dataset_name=analysis.dataset_name,
+            dataset_name=dataset.name if dataset else analysis.dataset_name,
             total_discovered_files=discovery.total_images if hasattr(discovery, "total_images") else discovery.discovered_image_files or 0,
             total_valid_images=validation.total_validated_images,
             total_invalid_images=validation.total_corrupted_images,
@@ -213,8 +229,8 @@ class EdaService:
         report = EdaReport(
             id=eda_id,
             dataset_id=dataset_id,
-            dataset_name=analysis.dataset_name,
-            version_id=(dataset_service.get_dataset(dataset_id).current_version_id if dataset_service.get_dataset(dataset_id) else None),
+            dataset_name=dataset.name if dataset else analysis.dataset_name,
+            version_id=selected_version_id or analysis.version_id,
             source_analysis_id=analysis.id,
             source_quality_assessment_id=quality_assessment.id if quality_assessment else None,
             status=EdaStatus.COMPLETED,
@@ -242,6 +258,42 @@ class EdaService:
 
         return report
 
+    def _run_tabular_eda(self, dataset, dataset_root) -> EdaReport:
+        import csv
+        from app.services.preprocessing.tabular_preprocessing import _resolve_tabular_files
+        from app.services.tabular_values import is_missing_value
+        files = _resolve_tabular_files(dataset_root)
+        summaries = []
+        warnings = []
+        for path in files:
+            try:
+                with path.open("r", encoding="utf-8-sig", newline="") as stream:
+                    reader = csv.DictReader(stream, delimiter="\t" if path.suffix.lower() == ".tsv" else ",")
+                    columns = reader.fieldnames or []
+                    rows = list(reader)
+                summaries.append({"file": path.name, "row_count": len(rows), "column_count": len(columns),
+                    "columns": columns, "missing_by_column": {c: sum(is_missing_value(row.get(c)) for row in rows) for c in columns}})
+            except (OSError, UnicodeError, csv.Error) as exc:
+                warnings.append(f"Could not read {path.name}: {exc}")
+        if not summaries:
+            raise ValueError("No readable supported tabular files were available for EDA.")
+        row_count = sum(item["row_count"] for item in summaries)
+        col_count = max((item["column_count"] for item in summaries), default=0)
+        missing_count = sum(sum(item["missing_by_column"].values()) for item in summaries)
+        now = datetime.now(timezone.utc).isoformat()
+        report = EdaReport(id=f"eda-{dataset.id}-{uuid.uuid4().hex[:10]}", dataset_id=dataset.id,
+            dataset_name=dataset.name, version_id=dataset.current_version_id, modality="tabular",
+            tabular_summary={"files": summaries, "row_count": row_count, "column_count": col_count, "missing_cell_count": missing_count},
+            source_analysis_id=None, source_quality_assessment_id=None, status=EdaStatus.COMPLETED,
+            created_at=now, completed_at=now, duration_ms=0.0,
+            overview=DatasetOverview(dataset_id=dataset.id, dataset_name=dataset.name,
+                total_size_human="not calculated for tabular EDA", analysis_id=None,
+                quality_assessment_id=None, eda_methodology_version=_METHODOLOGY_VERSION),
+            class_metadata=[], findings=[], warnings=warnings)
+        self._reports[report.id] = report
+        self._storage.save_eda_report(report.id, report.model_dump(), dataset_id=dataset.id)
+        return report
+
     def get_report(self, eda_id: str) -> Optional[EdaReport]:
         """Retrieve an EDA report by ID (memory cache first, then disk)."""
         if eda_id in self._reports:
@@ -256,15 +308,20 @@ class EdaService:
                 logger.warning(f"Failed to parse persisted EDA report {eda_id}: {exc}")
         return None
 
-    def get_latest_report_for_dataset(self, dataset_id: str) -> Optional[EdaReport]:
+    def get_latest_report_for_dataset(self, dataset_id: str, version_id: Optional[str] = None) -> Optional[EdaReport]:
         """Retrieve the latest EDA report for a dataset."""
-        candidates = [r for r in self._reports.values() if r.dataset_id == dataset_id]
+        if version_id is None:
+            dataset = dataset_service.get_dataset(dataset_id)
+            version_id = dataset.current_version_id if dataset else None
+        candidates = [r for r in self._reports.values() if r.dataset_id == dataset_id and (version_id is None or r.version_id == version_id)]
         if candidates:
             candidates.sort(key=lambda r: r.created_at, reverse=True)
             return candidates[0]
         eda_id = self._storage.get_latest_eda_report_id_for_dataset(dataset_id)
         if eda_id:
-            return self.get_report(eda_id)
+            report = self.get_report(eda_id)
+            if report and (version_id is None or report.version_id == version_id):
+                return report
         return None
 
     def get_report_status(self, eda_id: str) -> Optional[EdaStatusResponse]:

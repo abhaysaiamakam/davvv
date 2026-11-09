@@ -138,6 +138,7 @@ class UnifiedAnalysisMetrics(BaseModel):
 class UnifiedAnalysisResult(BaseModel):
     id: str = Field(..., description="Unique analysis job ID")
     dataset_id: str = Field(..., description="Associated dataset ID")
+    version_id: Optional[str] = Field(default=None, description="Exact dataset version analyzed")
     dataset_name: str = Field(..., description="Dataset display name")
     status: AnalysisStatus = Field(..., description="Job execution status")
     created_at: str = Field(..., description="ISO 8601 job creation timestamp")

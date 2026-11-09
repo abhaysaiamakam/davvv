@@ -151,15 +151,15 @@ export interface ClassMetadataSummary {
 export interface DatasetOverview {
   dataset_id: string;
   dataset_name: string;
-  total_discovered_files: number;
-  total_valid_images: number;
-  total_invalid_images: number;
-  class_count: number;
-  classes_with_images: number;
-  empty_class_count: number;
-  format_count: number;
-  unique_dimension_count: number;
-  total_size_bytes: number;
+  total_discovered_files: number | null;
+  total_valid_images: number | null;
+  total_invalid_images: number | null;
+  class_count: number | null;
+  classes_with_images: number | null;
+  empty_class_count: number | null;
+  format_count: number | null;
+  unique_dimension_count: number | null;
+  total_size_bytes: number | null;
   total_size_human: string;
   analysis_id: string | null;
   quality_assessment_id: string | null;
@@ -188,6 +188,8 @@ export interface EdaReport {
   dataset_id: string;
   dataset_name: string;
   version_id?: string | null;
+  modality?: string;
+  tabular_summary?: { files: Array<{ file: string; row_count: number; column_count: number; columns: string[]; missing_by_column: Record<string, number> }>; row_count: number; column_count: number; missing_cell_count: number } | null;
   source_analysis_id: string | null;
   source_quality_assessment_id: string | null;
   status: EdaStatus;
@@ -196,12 +198,12 @@ export interface EdaReport {
   duration_ms: number | null;
   methodology_version: string;
   overview: DatasetOverview;
-  class_distribution: ClassDistributionAnalysis;
-  dimension_analysis: DimensionStats;
-  aspect_ratio_analysis: AspectRatioAnalysis;
-  format_analysis: FormatAnalysis;
-  color_analysis: ColorAnalysis;
-  file_size_analysis: FileSizeStats;
+  class_distribution?: ClassDistributionAnalysis | null;
+  dimension_analysis?: DimensionStats | null;
+  aspect_ratio_analysis?: AspectRatioAnalysis | null;
+  format_analysis?: FormatAnalysis | null;
+  color_analysis?: ColorAnalysis | null;
+  file_size_analysis?: FileSizeStats | null;
   class_metadata: ClassMetadataSummary[];
   findings: EdaFinding[];
   warnings: string[];
@@ -213,8 +215,8 @@ export interface EdaReportSummary {
   status: EdaStatus;
   created_at: string;
   completed_at: string | null;
-  total_valid_images: number;
-  class_count: number;
+  total_valid_images: number | null;
+  class_count: number | null;
   findings_count: number;
 }
 

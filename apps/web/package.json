@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test:thumbnail-state": "node --test src/lib/thumbnail-state.test.mjs"
   },
   "dependencies": {
     "@croplens/shared-types": "*",

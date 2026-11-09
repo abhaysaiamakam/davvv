@@ -63,7 +63,8 @@ class DuplicateDetectionService:
         return parent if parent != "." else "_root_"
 
     def detect_duplicates(
-        self, dataset: DatasetMetadata, storage: StorageBackend
+        self, dataset: DatasetMetadata, storage: StorageBackend,
+        version_id: Optional[str] = None,
     ) -> DuplicateAnalysisResult:
         """
         Execute exact duplicate detection across validated images of a dataset.
@@ -75,11 +76,30 @@ class DuplicateDetectionService:
         if dataset.validation is None:
             raise DatasetNotValidatedError(dataset.id)
 
-        # Resolve dataset filesystem root
+        # Resolve exactly the selected version. Uploaded datasets must never fall
+        # back to the unversioned extraction directory: validation paths are
+        # relative to the version that produced them.
         if dataset.is_curated:
             dataset_root = storage.get_curated_path(dataset.slug)
         else:
-            dataset_root = storage.get_extract_path(dataset.id)
+            selected_version_id = version_id or dataset.current_version_id
+            version_record = (
+                storage.load_dataset_version(dataset.id, selected_version_id)
+                if selected_version_id else None
+            )
+            if version_record:
+                relative = version_record.get("storage_relative_path")
+                if not relative:
+                    raise DatasetDirectoryNotFoundError(dataset.id, "selected version has no storage path")
+                dataset_root = (storage.base_dir / relative).resolve()
+                if not storage.is_safe_path(dataset_root):
+                    raise DatasetDirectoryNotFoundError(dataset.id, "selected version path is outside storage")
+            elif selected_version_id:
+                raise DatasetDirectoryNotFoundError(dataset.id, f"version {selected_version_id} is not registered")
+            else:
+                # Legacy datasets without version metadata retain their original
+                # path contract.
+                dataset_root = storage.resolve_dataset_path(dataset)
 
         if not dataset_root.exists() or not dataset_root.is_dir():
             raise DatasetDirectoryNotFoundError(dataset.id, str(dataset_root))
@@ -110,16 +130,20 @@ class DuplicateDetectionService:
             class_name = self._extract_class_name(record.relative_path)
             class_eligible_counts[class_name] += 1
 
-            file_path = dataset_root / record.relative_path
-
-            # Symlink safety check
-            if file_path.is_symlink() and not self._is_symlink_safe(
-                file_path, dataset_root_resolved
+            candidate_path = dataset_root / record.relative_path
+            if candidate_path.is_symlink() and not self._is_symlink_safe(
+                candidate_path, dataset_root_resolved
             ):
                 hashing_failures += 1
                 warnings.append(
-                    f"Symlink escapes dataset boundary, skipped hashing: {record.relative_path}"
+                    f"Symlink escapes selected version root, skipped hashing: {record.relative_path}"
                 )
+                continue
+            file_path = candidate_path.resolve()
+
+            if dataset_root_resolved not in file_path.parents:
+                hashing_failures += 1
+                warnings.append(f"Image path escapes selected version root, skipped hashing: {record.relative_path}")
                 continue
 
             try:
@@ -143,11 +167,15 @@ class DuplicateDetectionService:
                 )
                 hash_to_members[sha256_hex].append(member)
 
-            except (OSError, PermissionError) as exc:
+            except FileNotFoundError:
                 hashing_failures += 1
-                warnings.append(
-                    f"I/O error computing hash for {record.relative_path}: {exc}"
-                )
+                warnings.append(f"File missing on filesystem when hashing: {record.relative_path}")
+            except PermissionError as exc:
+                hashing_failures += 1
+                warnings.append(f"Permission denied when hashing {record.relative_path}: {exc}")
+            except OSError as exc:
+                hashing_failures += 1
+                warnings.append(f"I/O error computing hash for {record.relative_path}: {exc}")
 
         unique_content_groups = len(hash_to_members)
 
@@ -234,7 +262,7 @@ class DuplicateDetectionService:
         return DuplicateAnalysisResult(
             dataset_id=dataset.id,
             dataset_name=dataset.name,
-            version_id=dataset.current_version_id,
+            version_id=version_id or dataset.current_version_id,
             analysis_timestamp=now,
             total_eligible_images=total_eligible,
             successfully_hashed_images=successfully_hashed,

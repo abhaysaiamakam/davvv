@@ -21,6 +21,8 @@ export interface QualityFinding {
   threshold_used?: string | null;
   affected_classes: string[];
   affected_image_samples: string[];
+  affected_columns?: string[];
+  missing_value_samples?: Array<Record<string, unknown>>;
   recommended_action: string;
   evidence_references: string[];
   methodology_version: string;
@@ -40,8 +42,8 @@ export interface ImageIntegrityAssessment {
 }
 
 export interface ClassImbalanceAssessment {
-  total_classes: number;
-  classes_with_images: number;
+  total_classes: number | null;
+  classes_with_images: number | null;
   empty_classes: string[];
   min_class_count: number | null;
   max_class_count: number | null;
@@ -71,8 +73,8 @@ export interface MetadataConsistencyAssessment {
   mean_aspect_ratio: number | null;
   format_distribution: Record<string, number>;
   color_mode_distribution: Record<string, number>;
-  aspect_ratio_outliers_count: number;
-  small_dimension_images_count: number;
+  aspect_ratio_outliers_count: number | null;
+  small_dimension_images_count: number | null;
   consistency_rate: number | null;
   is_available: boolean;
   evaluation_notes: string[];
@@ -90,7 +92,7 @@ export interface DuplicateImpactAssessment {
   total_redundant_images: number | null;
   clean_unique_images: number | null;
   duplicate_impact_severity: string;
-  classes_affected_count: number;
+  classes_affected_count: number | null;
   class_duplicate_breakdown: Record<string, number>;
   is_available: boolean;
   evaluation_notes: string[];
@@ -106,7 +108,7 @@ export interface QualityScoreComponent {
 }
 
 export interface TransparentQualityScore {
-  overall_score: number;
+  overall_score: number | null;
   quality_tier: string;
   methodology_version: string;
   components: Record<string, QualityScoreComponent>;
@@ -119,6 +121,7 @@ export interface DataQualityAssessment {
   id: string;
   dataset_id: string;
   dataset_name: string;
+  modality?: string;
   version_id?: string | null;
   source_analysis_id?: string | null;
   status: AnalysisStatus;

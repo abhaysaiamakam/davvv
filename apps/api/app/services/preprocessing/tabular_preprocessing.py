@@ -21,6 +21,7 @@ from app.schemas.preprocessing import (
     PreprocessingOperationType,
 )
 from app.services.preprocessing.base_operation import BasePreprocessingOperation
+from app.services.tabular_values import is_missing_value, missing_representation
 
 
 def _resolve_tabular_files(dataset_root: Path, target_file: Optional[str] = None) -> List[Path]:
@@ -43,11 +44,11 @@ def _resolve_tabular_files(dataset_root: Path, target_file: Optional[str] = None
     return found
 
 
-def _read_table(file_path: Path) -> Tuple[List[str], List[Dict[str, str]]]:
+def _read_table(file_path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
     """Read CSV or TSV file into header list and list of row dicts."""
     delimiter = "\t" if file_path.suffix.lower() == ".tsv" else ","
     headers: List[str] = []
-    rows: List[Dict[str, str]] = []
+    rows: List[Dict[str, Any]] = []
 
     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.reader(f, delimiter=delimiter)
@@ -60,9 +61,9 @@ def _read_table(file_path: Path) -> Tuple[List[str], List[Dict[str, str]]]:
         for r in reader:
             if not r:
                 continue
-            row_dict: Dict[str, str] = {}
+            row_dict: Dict[str, Any] = {}
             for i, h in enumerate(headers):
-                row_dict[h] = r[i].strip() if i < len(r) else ""
+                row_dict[h] = r[i] if i < len(r) else None
             rows.append(row_dict)
 
     return headers, rows
@@ -80,11 +81,9 @@ def _write_table(file_path: Path, headers: List[str], rows: List[Dict[str, Any]]
 
 def _is_numeric(val: Any) -> bool:
     """Check if value can be interpreted as a number."""
-    if val is None:
+    if is_missing_value(val):
         return False
     s = str(val).strip()
-    if not s or s.lower() in ("nan", "none", "null", "n/a", ""):
-        return False
     try:
         float(s)
         return True
@@ -101,7 +100,7 @@ def _to_float(val: Any) -> Optional[float]:
 
 def _is_column_numeric(rows: List[Dict[str, str]], col: str) -> bool:
     """Return True if at least 70% of non-empty values in col are numeric."""
-    non_empty = [r[col] for r in rows if col in r and r[col] != ""]
+    non_empty = [r[col] for r in rows if col in r and not is_missing_value(r[col])]
     if not non_empty:
         return False
     numeric_count = sum(1 for v in non_empty if _is_numeric(v))
@@ -188,7 +187,7 @@ class MissingValueImputationOperation(BasePreprocessingOperation):
         fill_val = config.parameters.get("fill_value")
         target_cols = config.target_columns or config.parameters.get("columns", [])
 
-        total_affected_rows = 0
+        affected_row_positions: Set[int] = set()
         all_affected_cols: Set[str] = set()
         warnings: List[str] = []
 
@@ -211,11 +210,12 @@ class MissingValueImputationOperation(BasePreprocessingOperation):
         # Count missing values before
         missing_before: Dict[str, int] = {}
         for col in active_cols:
-            count = sum(1 for r in rows if r.get(col, "") in ("", "nan", "null", "none", "n/a"))
+            positions = [i for i, r in enumerate(rows, start=1) if is_missing_value(r.get(col))]
+            count = len(positions)
             if count > 0:
                 missing_before[col] = count
                 all_affected_cols.add(col)
-                total_affected_rows += count
+                affected_row_positions.update(positions)
 
         sample_before = rows[:3] if rows else []
         sample_after: List[Dict[str, Any]] = []
@@ -235,7 +235,7 @@ class MissingValueImputationOperation(BasePreprocessingOperation):
                         mid = len(nums) // 2
                         computed_fills[col] = round(nums[mid] if len(nums) % 2 != 0 else (nums[mid - 1] + nums[mid]) / 2, 4)
             elif strategy == "most_frequent":
-                vals = [r[col] for r in rows if r.get(col, "") not in ("", "nan", "null")]
+                vals = [r[col] for r in rows if not is_missing_value(r.get(col))]
                 if vals:
                     from collections import Counter
                     computed_fills[col] = Counter(vals).most_common(1)[0][0]
@@ -243,21 +243,35 @@ class MissingValueImputationOperation(BasePreprocessingOperation):
         for r in sample_before:
             simulated = dict(r)
             for col, fv in computed_fills.items():
-                if simulated.get(col, "") in ("", "nan", "null", "none", "n/a"):
+                if is_missing_value(simulated.get(col)):
                     simulated[col] = fv
             sample_after.append(simulated)
 
         return OperationPreviewResult(
             operation_type=self.operation_type,
             status="valid",
-            affected_rows=total_affected_rows,
+            affected_rows=len(affected_row_positions),
             affected_columns=sorted(list(all_affected_cols)),
             affected_files=[f.name for f in files],
             rows_before=rows_before,
             rows_after=rows_before,
             files_before=len(files),
             files_after=len(files),
-            before_metrics={"missing_values": missing_before},
+            before_metrics={
+                "missing_values": missing_before,
+                "missing_value_samples": [
+                    {
+                        "source_row_position": pos,
+                        "missing_cells": [
+                            {"column": col, "representation": missing_representation(rows[pos - 1].get(col))}
+                            for col in sorted(all_affected_cols)
+                            if is_missing_value(rows[pos - 1].get(col))
+                        ],
+                        "row": rows[pos - 1],
+                    }
+                    for pos in sorted(affected_row_positions)[:20]
+                ],
+            },
             after_metrics={"imputed_values": computed_fills, "remaining_missing": 0},
             sample_before=sample_before,
             sample_after=sample_after,
@@ -305,7 +319,7 @@ class MissingValueImputationOperation(BasePreprocessingOperation):
                             mid = len(nums) // 2
                             computed_fills[col] = round(nums[mid] if len(nums) % 2 != 0 else (nums[mid - 1] + nums[mid]) / 2, 4)
                 elif strategy == "most_frequent":
-                    vals = [r[col] for r in rows if r.get(col, "") not in ("", "nan", "null")]
+                    vals = [r[col] for r in rows if not is_missing_value(r.get(col))]
                     if vals:
                         from collections import Counter
                         computed_fills[col] = Counter(vals).most_common(1)[0][0]
@@ -314,7 +328,7 @@ class MissingValueImputationOperation(BasePreprocessingOperation):
             for r in rows:
                 row_modified = False
                 for col, fv in computed_fills.items():
-                    if r.get(col, "") in ("", "nan", "null", "none", "n/a"):
+                    if is_missing_value(r.get(col)):
                         r[col] = str(fv)
                         all_affected_cols.add(col)
                         row_modified = True
@@ -391,7 +405,7 @@ class DropMissingRowsOperation(BasePreprocessingOperation):
         kept_rows: List[Dict[str, str]] = []
         dropped_count = 0
         for r in rows:
-            has_missing = any(r.get(c, "") in ("", "nan", "null", "none", "n/a") for c in check_cols)
+            has_missing = any(is_missing_value(r.get(c)) for c in check_cols)
             if has_missing:
                 dropped_count += 1
             else:
@@ -433,7 +447,7 @@ class DropMissingRowsOperation(BasePreprocessingOperation):
 
             kept: List[Dict[str, str]] = []
             for r in rows:
-                if not any(r.get(c, "") in ("", "nan", "null", "none", "n/a") for c in check_cols):
+                if not any(is_missing_value(r.get(c)) for c in check_cols):
                     kept.append(r)
                 else:
                     total_dropped += 1
@@ -512,7 +526,7 @@ class DropMissingColumnsOperation(BasePreprocessingOperation):
 
         if total_rows > 0:
             for col in headers:
-                missing = sum(1 for r in rows if r.get(col, "") in ("", "nan", "null", "none", "n/a"))
+                missing = sum(1 for r in rows if is_missing_value(r.get(col)))
                 if (missing / total_rows) >= thresh:
                     dropped_cols.append(col)
 
@@ -549,7 +563,7 @@ class DropMissingColumnsOperation(BasePreprocessingOperation):
 
             dropped: List[str] = []
             for col in headers:
-                missing = sum(1 for r in rows if r.get(col, "") in ("", "nan", "null", "none", "n/a"))
+                missing = sum(1 for r in rows if is_missing_value(r.get(col)))
                 if (missing / total_rows) >= thresh:
                     dropped.append(col)
                     all_dropped.add(col)
@@ -1008,7 +1022,7 @@ class TypeConversionOperation(BasePreprocessingOperation):
         return errors
 
     def _convert_val(self, val: str, target_type: str, errors: str) -> Tuple[Any, bool]:
-        if val in ("", "nan", "null", "none"):
+        if is_missing_value(val):
             return val, True
         try:
             if target_type == "integer":

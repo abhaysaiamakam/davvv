@@ -11,6 +11,7 @@ import { useDatasetVersion } from "@/hooks/use-dataset-version";
 import { WorkspaceDatasetSelect } from "@/components/ui/workspace-dataset-select";
 import { WorkspaceVersionSelect } from "@/components/ui/workspace-version-select";
 import { CodeLensExplainability } from "@/components/ui/codelens";
+import { initialThumbnailState, shouldShowThumbnailFallback, thumbnailStateAfterEvent } from "@/lib/thumbnail-state.mjs";
 import { ContextualExportAction } from "@/components/exports/contextual-export-action";
 import { PageContainer } from "@/components/layout/page-container";
 import { DashboardCard } from "@/components/ui/dashboard-card";
@@ -123,6 +124,7 @@ export default function VisualExplorerPage() {
     try {
       const result = await apiClient.applyPreprocessing(context.selectedId, version.versionId, [{ ...previewOperation, modality: "image", target_columns: [] }], `Image ${previewMode.replaceAll("_", " ")}`);
       setDerivedJob({ version: result.derived_version_id, job: result.job_id });
+      await version.reload();
     } catch (issue) { setPreviewError(issue instanceof Error ? issue.message : "Could not create a derived version."); }
     finally { setApplyBusy(false); }
   }
@@ -153,7 +155,7 @@ export default function VisualExplorerPage() {
 
       {!classes.length && !error && <EmptyState icon={<Images/>} title="No supported images in this version" description="This version contains no supported image files."/>}
       {items.length > 0 && <section aria-label="Image gallery" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{items.map(image => <button key={image.image_id} type="button" onClick={() => setSelected(image)} className="overflow-hidden rounded-xl border border-croplens-border bg-white text-left transition hover:border-emerald-300 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600">
-        <div className="relative aspect-[4/3] bg-gray-100">{image.status === "valid" ? <Image src={apiClient.imageAssetUrl(image.thumbnail_url)} alt={`${image.filename}, ${image.class_name}`} fill sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw" unoptimized loading="lazy" onError={event => { event.currentTarget.style.display = "none"; const sibling = event.currentTarget.nextElementSibling as HTMLElement | null; if (sibling) sibling.hidden = false; }} className="object-cover"/> : null}<div hidden className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-2 text-center text-xs text-zinc-500"><Images size={18}/>{image.status === "valid" ? "Thumbnail unavailable" : image.status}</div></div>
+        <GalleryThumbnail src={image.status === "valid" ? apiClient.imageAssetUrl(image.thumbnail_url) : null} alt={`${image.filename}, ${image.class_name}`} status={image.status}/>
         <div className="p-2.5"><p className="truncate text-xs font-semibold text-zinc-900">{image.filename}</p><p className="mt-1 truncate text-[10px] text-zinc-500">{image.class_name}</p><p className="mt-1 text-[10px] text-zinc-400">{image.width && image.height ? `${image.width} × ${image.height} · ` : ""}{image.format ?? "Unknown format"}</p></div>
       </button>)}</section>}
 
@@ -186,6 +188,15 @@ function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function GalleryThumbnail({ src, alt, status }: { src: string | null; alt: string; status: string }) {
+  const [state, setState] = useState<"loading" | "loaded" | "failed">(initialThumbnailState(Boolean(src)));
+  useEffect(() => { setState(initialThumbnailState(Boolean(src))); }, [src]);
+  return <div className="relative aspect-[4/3] bg-gray-100">
+    {src && <Image src={src} alt={alt} fill sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw" unoptimized loading="lazy" onLoad={() => setState(thumbnailStateAfterEvent("load"))} onError={() => setState(thumbnailStateAfterEvent("error"))} className={`object-cover ${state === "failed" ? "hidden" : ""}`}/>}
+    {(state === "loading" || shouldShowThumbnailFallback(state)) && <div role={shouldShowThumbnailFallback(state) ? "status" : undefined} className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-2 text-center text-xs text-zinc-500">{state === "loading" ? <LoaderCircle size={18} className="animate-spin"/> : <Images size={18} />}{state === "loading" ? "Loading thumbnail…" : status === "valid" ? "Thumbnail unavailable" : status}</div>}
+  </div>;
 }
 
 function overlayColor(index: number) {

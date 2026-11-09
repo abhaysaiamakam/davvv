@@ -1,6 +1,8 @@
 import logging
 import shutil
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -55,6 +57,9 @@ class DatasetService:
         self._near_duplicate_results: Dict[str, NearDuplicateAnalysisResult] = {}
         self._dynamic_registry: Dict[str, DatasetMetadata] = {}
         self._versions: Dict[str, Dict[str, DatasetVersion]] = {}
+        self._version_scope: ContextVar[Optional[Tuple[str, str, DatasetMetadata]]] = ContextVar(
+            "croplens_dataset_version_scope", default=None
+        )
         self._curated_registry: List[DatasetMetadata] = [
             DatasetMetadata(
                 id="icar-rice-maize",
@@ -234,6 +239,9 @@ class DatasetService:
         )
 
     def get_dataset(self, dataset_id: str) -> Optional[DatasetMetadata]:
+        scoped = self._version_scope.get()
+        if scoped and scoped[0] == dataset_id:
+            return scoped[2]
         # Check dynamic registry first
         if dataset_id in self._dynamic_registry:
             return self._dynamic_registry[dataset_id]
@@ -246,6 +254,27 @@ class DatasetService:
             if ds.id == dataset_id or ds.slug == dataset_id:
                 return ds
         return None
+
+    @contextmanager
+    def version_scope(self, dataset_id: str, version_id: str):
+        """Bind a worker's dataset reads to one immutable version snapshot."""
+        base = self.get_dataset(dataset_id)
+        if not base:
+            raise DatasetNotFoundError(dataset_id)
+        version = self.get_version(dataset_id, version_id)
+        if not version:
+            raise VersionNotFoundError(dataset_id, version_id)
+        snapshot = base.model_copy(update={
+            "current_version_id": version.version_id,
+            "current_version_number": version.version_number,
+            "storage_relative_path": version.storage_relative_path,
+            "status": version.status,
+        })
+        token = self._version_scope.set((dataset_id, version_id, snapshot))
+        try:
+            yield snapshot
+        finally:
+            self._version_scope.reset(token)
 
     def discover_dataset(self, dataset_id: str) -> DatasetDiscoveryResult:
         """
@@ -288,7 +317,8 @@ class DatasetService:
             return res
 
         # Check if persisted analysis exists and has discovery
-        latest = self.get_latest_analysis(dataset.id)
+        from app.services.analysis_service import analysis_service
+        latest = analysis_service.get_latest_analysis_for_dataset(dataset.id, selected_version_id)
         if latest and latest.discovery:
             self._discovery_results[dataset.id] = latest.discovery
             dataset.discovery = latest.discovery
@@ -342,7 +372,8 @@ class DatasetService:
             return result
 
         # Rehydrate from persisted analysis if present
-        latest = self.get_latest_analysis(dataset.id)
+        from app.services.analysis_service import analysis_service
+        latest = analysis_service.get_latest_analysis_for_dataset(dataset.id, selected_version_id)
         if latest and latest.validation:
             self._validation_results[dataset.id] = latest.validation
             dataset.validation = latest.validation
@@ -352,7 +383,7 @@ class DatasetService:
 
         raise DatasetNotValidatedError(dataset_id)
 
-    def detect_duplicates(self, dataset_id: str) -> DuplicateAnalysisResult:
+    def detect_duplicates(self, dataset_id: str, version_id: Optional[str] = None) -> DuplicateAnalysisResult:
         """
         Run exact duplicate detection on a validated dataset.
         Identifies byte-identical files using chunked streaming SHA-256.
@@ -361,38 +392,49 @@ class DatasetService:
         if not dataset:
             raise DatasetNotFoundError(dataset_id)
 
-        if dataset.validation is None:
-            raise DatasetNotValidatedError(dataset_id)
+        selected_version_id = version_id or dataset.current_version_id
+        from app.services.analysis_service import analysis_service
+        analysis = analysis_service.get_latest_analysis_for_dataset(dataset_id, selected_version_id)
+        if analysis and analysis.validation:
+            dataset = dataset.model_copy(update={"validation": analysis.validation})
+        else:
+            scoped = self._version_scope.get()
+            if scoped and scoped[0] == dataset_id and scoped[1] == selected_version_id and scoped[2].validation:
+                dataset = dataset.model_copy(update={"validation": scoped[2].validation})
+            elif selected_version_id is not None or dataset.validation is None:
+                raise DatasetNotValidatedError(dataset_id)
 
-        result = duplicate_detection_service.detect_duplicates(dataset, storage_backend)
+        result = duplicate_detection_service.detect_duplicates(
+            dataset, storage_backend, version_id=selected_version_id
+        )
 
         # Update dataset metadata with duplicate metrics
-        dataset.duplicates = result
-        dataset.duplicate_groups_count = result.exact_duplicate_groups
+        if selected_version_id == dataset.current_version_id:
+            dataset.duplicates = result
+            dataset.duplicate_groups_count = result.exact_duplicate_groups
 
-        self._duplicate_results[dataset.id] = result
-        if dataset.slug != dataset.id:
-            self._duplicate_results[dataset.slug] = result
+        cache_key = f"{dataset.id}:{selected_version_id or 'legacy'}"
+        self._duplicate_results[cache_key] = result
 
         return result
 
-    def get_duplicate_result(self, dataset_id: str) -> DuplicateAnalysisResult:
+    def get_duplicate_result(self, dataset_id: str, version_id: Optional[str] = None) -> DuplicateAnalysisResult:
         """Retrieve previously computed duplicate analysis metadata for a dataset."""
         dataset = self.get_dataset(dataset_id)
         if not dataset:
             raise DatasetNotFoundError(dataset_id)
 
-        result = self._duplicate_results.get(dataset.id)
-        if result:
+        selected_version_id = version_id or dataset.current_version_id
+        result = self._duplicate_results.get(f"{dataset.id}:{selected_version_id or 'legacy'}")
+        if result and (selected_version_id is None or result.version_id == selected_version_id):
             return result
 
         # Rehydrate from persisted analysis if present
         latest = self.get_latest_analysis(dataset.id)
         if latest and latest.exact_duplicates:
-            self._duplicate_results[dataset.id] = latest.exact_duplicates
-            dataset.duplicates = latest.exact_duplicates
-            dataset.duplicate_groups_count = latest.exact_duplicates.exact_duplicate_groups
-            return latest.exact_duplicates
+            if selected_version_id is None or latest.version_id == selected_version_id:
+                self._duplicate_results[f"{dataset.id}:{latest.version_id or 'legacy'}"] = latest.exact_duplicates
+                return latest.exact_duplicates
 
         raise DuplicateAnalysisNotFoundError(dataset_id)
 
@@ -543,7 +585,9 @@ class DatasetService:
         existing_versions = self.list_versions(dataset_id)
         if existing_versions:
             latest = existing_versions[0]
-            if latest.content_fingerprint == content_fingerprint and latest.status in (DatasetStatus.READY, DatasetStatus.REGISTERED):
+            if latest.content_fingerprint == content_fingerprint and latest.status in (
+                DatasetStatus.READY, DatasetStatus.REGISTERED, DatasetStatus.ANALYZING
+            ):
                 logger.info(
                     f"Content fingerprint {content_fingerprint[:8]} matches active version {latest.version_id}. Reusing."
                 )
@@ -634,6 +678,9 @@ class DatasetService:
 
     def get_latest_version(self, dataset_id: str) -> Optional[DatasetVersion]:
         """Retrieve latest successful ready version, or latest version overall."""
+        scoped = self._version_scope.get()
+        if scoped and scoped[0] == dataset_id:
+            return self.get_version(dataset_id, scoped[1])
         versions = self.list_versions(dataset_id)
         if not versions:
             return None
@@ -647,11 +694,11 @@ class DatasetService:
         self,
         dataset_id: str,
         version_id: str,
-        source_analysis_id: str,
+        source_analysis_id: Optional[str],
         source_quality_id: str,
         source_eda_id: str,
-        image_count: int,
-        class_count: int,
+        image_count: Optional[int],
+        class_count: Optional[int],
     ) -> None:
         """Mark dataset version and active dataset state as completed and ready."""
         ver = self.get_version(dataset_id, version_id)
@@ -664,13 +711,27 @@ class DatasetService:
             ver.class_count = class_count
             storage_backend.save_dataset_version(dataset_id, version_id, ver.model_dump())
 
-        dataset = self.get_dataset(dataset_id)
-        if dataset:
+        dataset = self._dynamic_registry.get(dataset_id) or next(
+            (item for item in self._curated_registry if item.id == dataset_id), None
+        )
+        if dataset and dataset.current_version_id == version_id:
             dataset.status = DatasetStatus.READY
-            dataset.current_version_id = version_id
             dataset.validated_image_files = image_count
             dataset.total_images = image_count
             dataset.total_classes = class_count
+            storage_backend.save_dataset_metadata(dataset_id, dataset.model_dump())
+
+    def mark_version_analyzing(self, dataset_id: str, version_id: str) -> None:
+        """Mark only the requested snapshot as actively processing."""
+        version = self.get_version(dataset_id, version_id)
+        if version:
+            version.status = DatasetStatus.ANALYZING
+            storage_backend.save_dataset_version(dataset_id, version_id, version.model_dump())
+        dataset = self._dynamic_registry.get(dataset_id) or next(
+            (item for item in self._curated_registry if item.id == dataset_id), None
+        )
+        if dataset and dataset.current_version_id == version_id:
+            dataset.status = DatasetStatus.ANALYZING
             storage_backend.save_dataset_metadata(dataset_id, dataset.model_dump())
 
     def mark_version_failed(
@@ -683,8 +744,10 @@ class DatasetService:
             ver.error_message = error_message
             storage_backend.save_dataset_version(dataset_id, version_id, ver.model_dump())
 
-        dataset = self.get_dataset(dataset_id)
-        if dataset:
+        dataset = self._dynamic_registry.get(dataset_id) or next(
+            (item for item in self._curated_registry if item.id == dataset_id), None
+        )
+        if dataset and dataset.current_version_id == version_id:
             # Check if there is a previous ready version
             versions = self.list_versions(dataset_id)
             ready_versions = [v for v in versions if v.status == DatasetStatus.READY and v.version_id != version_id]
@@ -794,16 +857,22 @@ class DatasetService:
             shutil.rmtree(temp_extract_dir, ignore_errors=True)
             raise
 
-    def reanalyze_dataset(self, dataset_id: str) -> Any:
-        """Trigger a fresh asynchronous analysis job for the active version of a dataset."""
+    def reanalyze_dataset(self, dataset_id: str, version_id: Optional[str] = None) -> Any:
+        """Trigger a fresh asynchronous analysis job for the exact requested version."""
         from app.services.job_service import job_service
 
         dataset = self.get_dataset(dataset_id)
         if not dataset:
             raise DatasetNotFoundError(dataset_id)
 
-        latest_version = self.get_latest_version(dataset_id)
-        version_id = latest_version.version_id if latest_version else "v1"
+        if version_id is None:
+            dataset = self.get_dataset(dataset_id)
+            version_id = dataset.current_version_id if dataset and dataset.current_version_id else None
+        if version_id is None:
+            latest_version = self.get_latest_version(dataset_id)
+            version_id = latest_version.version_id if latest_version else "v1"
+        if not self.get_version(dataset_id, version_id):
+            raise VersionNotFoundError(dataset_id, version_id)
 
         job = job_service.create_job(dataset_id, version_id)
         job_service.enqueue_job(job.job_id)

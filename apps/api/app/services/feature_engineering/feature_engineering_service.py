@@ -252,7 +252,7 @@ class FeatureEngineeringService:
                 req.dataset_id, f"fe-{derived_version.version_id}", history_record.model_dump()
             )
 
-            job = dataset_service.reanalyze_dataset(req.dataset_id)
+            job = dataset_service.reanalyze_dataset(req.dataset_id, derived_version.version_id)
             history_record.job_id = job.job_id
             self.storage.save_preprocessing_history(
                 req.dataset_id, f"fe-{derived_version.version_id}", history_record.model_dump()

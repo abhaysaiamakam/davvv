@@ -1,5 +1,6 @@
 import logging
 import math
+import csv
 import statistics
 import time
 import uuid
@@ -25,6 +26,7 @@ from app.schemas.quality import (
 )
 from app.storage.base import StorageBackend
 from app.storage.local import storage_backend
+from app.services.tabular_values import is_missing_value, missing_representation
 
 logger = logging.getLogger(__name__)
 
@@ -108,18 +110,23 @@ class DataQualityService:
                 return None
         return None
 
-    def get_latest_assessment_for_dataset(self, dataset_id: str) -> Optional[DataQualityAssessment]:
+    def get_latest_assessment_for_dataset(self, dataset_id: str, version_id: Optional[str] = None) -> Optional[DataQualityAssessment]:
         """Retrieve latest quality assessment for a dataset."""
+        if version_id is None:
+            from app.services.dataset_service import dataset_service
+            scoped = dataset_service.get_dataset(dataset_id)
+            version_id = scoped.current_version_id if scoped else None
         latest_id = self.storage.get_latest_quality_assessment_id_for_dataset(dataset_id)
         if latest_id:
             res = self.get_assessment(latest_id)
-            if res:
+            if res and (version_id is None or res.version_id == version_id):
                 return res
 
         # Fallback: scan in-memory cache
         matching = [
             a for a in self._assessments.values()
-            if a.dataset_id == dataset_id or getattr(a, "dataset_id", "") == dataset_id
+            if (a.dataset_id == dataset_id or getattr(a, "dataset_id", "") == dataset_id)
+            and (version_id is None or a.version_id == version_id)
         ]
         if matching:
             matching.sort(key=lambda r: str(r.created_at), reverse=True)
@@ -169,10 +176,19 @@ class DataQualityService:
         now = datetime.now(timezone.utc).isoformat()
         assessment_id = f"qa-{dataset.slug}-{uuid.uuid4().hex[:10]}"
 
+        from app.services.preprocessing.preprocessing_registry import preprocessing_registry
+        from app.services.dataset_service import dataset_service
+        dataset_root = self.storage.resolve_dataset_path(dataset)
+        modalities = preprocessing_registry.detect_modalities(dataset_root)
+        modality_names = {item.value for item in modalities}
+        if "image" not in modality_names and "tabular" in modality_names:
+            return self._assess_tabular_dataset(
+                dataset, dataset_root, analysis, assessment_id, now, t_start
+            )
         # Obtain base analysis outputs (reuse or trigger)
         if analysis is None:
             if not force_refresh:
-                analysis = analysis_service.get_latest_analysis_for_dataset(dataset.id)
+                analysis = analysis_service.get_latest_analysis_for_dataset(dataset.id, dataset.current_version_id)
             if analysis is None:
                 logger.info(f"Triggering unified analysis for dataset {dataset.id} before quality assessment")
                 analysis = analysis_service.run_analysis(dataset.id)
@@ -245,6 +261,124 @@ class DataQualityService:
             logger.error(f"Failed to persist quality assessment {assessment.id}: {persist_err}")
             assessment.warnings.append(f"Persistence error: {persist_err}")
 
+        self._assessments[assessment.id] = assessment
+        return assessment
+
+    def _assess_tabular_dataset(self, dataset, dataset_root, analysis, assessment_id, now, started):
+        """Assess actual tabular missingness without emitting image-only metrics."""
+        from app.services.preprocessing.tabular_preprocessing import _resolve_tabular_files
+
+        files = _resolve_tabular_files(dataset_root)
+        if not files:
+            raise ValueError("Tabular modality was detected, but no readable CSV/TSV file was found.")
+        findings: List[QualityFinding] = []
+        warnings: List[str] = []
+        missing_total = 0
+        total_cells = 0
+        for path in files:
+            delimiter = "\t" if path.suffix.lower() == ".tsv" else ","
+            with path.open("r", encoding="utf-8-sig", newline="", errors="replace") as stream:
+                reader = csv.DictReader(stream, delimiter=delimiter)
+                if not reader.fieldnames:
+                    warnings.append(f"No header row found in {path.name}.")
+                    continue
+                rows = list(reader)
+            if not rows:
+                warnings.append(f"No data rows found in {path.name}.")
+                continue
+            total_cells += len(rows) * len(reader.fieldnames)
+            for column in reader.fieldnames:
+                positions = []
+                samples = []
+                for position, row in enumerate(rows, start=1):
+                    raw = row.get(column)
+                    if is_missing_value(raw):
+                        positions.append(position)
+                        if len(samples) < 20:
+                            samples.append({
+                                "source_row_position": position,
+                                "record_id_column": None,
+                                "record_id": None,
+                                "missing_column": column,
+                                "missing_representation": missing_representation(raw),
+                                "row": row,
+                            })
+                count = len(positions)
+                missing_total += count
+                if not count:
+                    continue
+                pct = round(count / len(rows) * 100, 2)
+                findings.append(QualityFinding(
+                    id=f"qa-tabular-missing-{dataset.current_version_id or 'current'}-{path.name}-{column}"[:180],
+                    category=QualityFindingCategory.METADATA,
+                    severity=QualitySeverity.HIGH if pct >= 50 else QualitySeverity.MEDIUM if pct >= 20 else QualitySeverity.LOW,
+                    title=f"Missing values in '{column}' ({pct}%)",
+                    explanation=f"{count} of {len(rows)} source rows have missing values in this column.",
+                    metric_name="missing_value_count",
+                    observed_value=count,
+                    expected_value=0,
+                    threshold_used="any missing source cell",
+                    affected_columns=[column],
+                    missing_value_samples=samples,
+                    recommended_action="Review the source missingness and choose an explicit imputation or row-removal strategy.",
+                    evidence_references=[f"file:{path.name}/column:{column}", f"rows:{len(rows)}"],
+                    methodology_version=self.METHODOLOGY_VERSION,
+                ))
+        if not files or not any(f.suffix.lower() in {".csv", ".tsv"} for f in files):
+            raise ValueError("No supported tabular file was available for quality analysis.")
+        if not findings:
+            findings.append(QualityFinding(
+                id=f"qa-tabular-no-missing-{dataset.current_version_id or 'current'}",
+                category=QualityFindingCategory.METADATA,
+                severity=QualitySeverity.INFO,
+                title="No missing values detected",
+                explanation="All inspected tabular cells contain values under the shared CropLens missing-value rules.",
+                metric_name="missing_value_count",
+                observed_value=0,
+                expected_value=0,
+                recommended_action="No missing-value handling is required.",
+                methodology_version=self.METHODOLOGY_VERSION,
+            ))
+        completeness = round((1.0 - missing_total / total_cells) * 100.0, 2) if total_cells else None
+        notes = ["Image integrity, image class balance, image metadata consistency, and image duplicate metrics are not applicable to tabular data."]
+        score = TransparentQualityScore(
+            overall_score=completeness,
+            quality_tier=("not_assessed" if completeness is None else "excellent" if completeness >= 95 else "good" if completeness >= 85 else "needs_review"),
+            components={"tabular_completeness": QualityScoreComponent(
+                name="Tabular cell completeness", score=completeness or 0.0, weight=1.0,
+                weighted_score=completeness or 0.0,
+                explanation="Share of inspected source cells that contain values under CropLens shared missing-value rules.",
+                metrics_used={"total_cells": total_cells, "missing_cells": missing_total},
+            )} if completeness is not None else {},
+            weight_configuration={"tabular_completeness": 1.0} if completeness is not None else {},
+            explanation="Computed from actual source cell missingness; image-only quality dimensions are not applicable.",
+            is_complete=completeness is not None and not warnings,
+        )
+        assessment = DataQualityAssessment(
+            id=assessment_id,
+            dataset_id=dataset.id,
+            dataset_name=dataset.name,
+            modality="tabular",
+            version_id=dataset.current_version_id,
+            source_analysis_id=analysis.id if analysis else None,
+            status=AnalysisStatus.COMPLETED,
+            created_at=now,
+            completed_at=datetime.now(timezone.utc).isoformat(),
+            duration_ms=round((time.perf_counter() - started) * 1000.0, 2),
+            methodology_version=self.METHODOLOGY_VERSION,
+            integrity=ImageIntegrityAssessment(status="not_applicable", is_available=False, evaluation_notes=notes),
+            imbalance=ClassImbalanceAssessment(imbalance_severity="not_applicable", evaluation_notes=notes),
+            metadata_consistency=MetadataConsistencyAssessment(is_available=False, evaluation_notes=notes),
+            duplicate_impact=DuplicateImpactAssessment(duplicate_impact_severity="not_applicable", is_available=False, evaluation_notes=notes),
+            quality_score=score,
+            findings=findings,
+            summary=f"Tabular quality assessment completed for {len(files)} file(s); {missing_total} missing cells were found.",
+            warnings=warnings,
+        )
+        try:
+            self.storage.save_quality_assessment(assessment.id, assessment.model_dump(), dataset_id=dataset.id)
+        except Exception as exc:
+            assessment.warnings.append(f"Persistence error: {exc}")
         self._assessments[assessment.id] = assessment
         return assessment
 

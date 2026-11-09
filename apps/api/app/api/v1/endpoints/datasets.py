@@ -307,12 +307,12 @@ async def get_dataset_validation(dataset_id: str) -> DatasetValidationResult:
     response_model=DuplicateAnalysisResult,
     summary="Detect Exact Duplicate Images via SHA-256",
 )
-async def detect_duplicates(dataset_id: str) -> DuplicateAnalysisResult:
+async def detect_duplicates(dataset_id: str, version_id: Optional[str] = Query(None)) -> DuplicateAnalysisResult:
     """
     Execute streaming SHA-256 exact content duplicate detection for validated images.
     Identifies byte-for-byte identical files, canonical representatives, and cross-class duplicates.
     """
-    return dataset_service.detect_duplicates(dataset_id)
+    return dataset_service.detect_duplicates(dataset_id, version_id)
 
 
 @router.get(
@@ -320,9 +320,9 @@ async def detect_duplicates(dataset_id: str) -> DuplicateAnalysisResult:
     response_model=DuplicateAnalysisResult,
     summary="Get Exact Duplicate Analysis Metadata",
 )
-async def get_dataset_duplicates(dataset_id: str) -> DuplicateAnalysisResult:
+async def get_dataset_duplicates(dataset_id: str, version_id: Optional[str] = Query(None)) -> DuplicateAnalysisResult:
     """Retrieve previously computed exact duplicate analysis report for a dataset."""
-    return dataset_service.get_duplicate_result(dataset_id)
+    return dataset_service.get_duplicate_result(dataset_id, version_id)
 
 
 @router.post(
@@ -406,6 +406,7 @@ async def get_dataset_analysis_status(dataset_id: str) -> AnalysisStatusResponse
 async def assess_dataset_quality(
     dataset_id: str,
     force_refresh: bool = False,
+    version_id: Optional[str] = Query(None),
 ) -> DataQualityAssessment:
     """
     Execute comprehensive dataset quality assessment across image integrity,
@@ -413,6 +414,9 @@ async def assess_dataset_quality(
     """
     from app.services.data_quality_service import data_quality_service
 
+    if version_id:
+        with dataset_service.version_scope(dataset_id, version_id):
+            return data_quality_service.assess_dataset(dataset_id, force_refresh=force_refresh)
     return data_quality_service.assess_dataset(dataset_id, force_refresh=force_refresh)
 
 
@@ -421,11 +425,11 @@ async def assess_dataset_quality(
     response_model=DataQualityAssessment,
     summary="Get Latest Dataset Quality Assessment",
 )
-async def get_dataset_quality_assessment(dataset_id: str) -> DataQualityAssessment:
+async def get_dataset_quality_assessment(dataset_id: str, version_id: Optional[str] = Query(None)) -> DataQualityAssessment:
     """Retrieve the latest quality assessment report for a dataset."""
     from app.services.data_quality_service import data_quality_service
 
-    assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id)
+    assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id, version_id)
     if not assessment:
         raise DatasetQualityAssessmentNotFoundError(dataset_id)
     return assessment
@@ -438,11 +442,12 @@ async def get_dataset_quality_assessment(dataset_id: str) -> DataQualityAssessme
 )
 async def get_dataset_quality_assessment_status(
     dataset_id: str,
+    version_id: Optional[str] = Query(None),
 ) -> QualityAssessmentStatusResponse:
     """Retrieve execution status for the latest quality assessment of this dataset."""
     from app.services.data_quality_service import data_quality_service
 
-    assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id)
+    assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id, version_id)
     if not assessment:
         raise DatasetQualityAssessmentNotFoundError(dataset_id)
     status_res = data_quality_service.get_assessment_status(assessment.id)
@@ -456,11 +461,11 @@ async def get_dataset_quality_assessment_status(
     response_model=List[QualityFinding],
     summary="Get Dataset Quality Findings",
 )
-async def get_dataset_quality_findings(dataset_id: str) -> List[QualityFinding]:
+async def get_dataset_quality_findings(dataset_id: str, version_id: Optional[str] = Query(None)) -> List[QualityFinding]:
     """Retrieve structured, evidence-backed quality findings and recommendations for a dataset."""
     from app.services.data_quality_service import data_quality_service
 
-    assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id)
+    assessment = data_quality_service.get_latest_assessment_for_dataset(dataset_id, version_id)
     if not assessment:
         raise DatasetQualityAssessmentNotFoundError(dataset_id)
     return assessment.findings
@@ -479,6 +484,7 @@ async def get_dataset_quality_findings(dataset_id: str) -> List[QualityFinding]:
 async def run_dataset_eda(
     dataset_id: str,
     force_refresh: bool = False,
+    version_id: Optional[str] = Query(None),
 ) -> EdaReport:
     """
     Execute the full EDA pipeline for a dataset.
@@ -486,6 +492,9 @@ async def run_dataset_eda(
     """
     from app.services.eda_service import eda_service
 
+    if version_id:
+        with dataset_service.version_scope(dataset_id, version_id):
+            return eda_service.run_eda(dataset_id, force_refresh=force_refresh)
     return eda_service.run_eda(dataset_id, force_refresh=force_refresh)
 
 
@@ -494,11 +503,11 @@ async def run_dataset_eda(
     response_model=EdaReport,
     summary="Get Latest Dataset EDA Report",
 )
-async def get_dataset_eda(dataset_id: str) -> EdaReport:
+async def get_dataset_eda(dataset_id: str, version_id: Optional[str] = Query(None)) -> EdaReport:
     """Retrieve the latest EDA report for a dataset."""
     from app.services.eda_service import eda_service
 
-    report = eda_service.get_latest_report_for_dataset(dataset_id)
+    report = eda_service.get_latest_report_for_dataset(dataset_id, version_id)
     if not report:
         raise DatasetEdaNotFoundError(dataset_id)
     return report
@@ -509,11 +518,11 @@ async def get_dataset_eda(dataset_id: str) -> EdaReport:
     response_model=EdaStatusResponse,
     summary="Get Latest Dataset EDA Status",
 )
-async def get_dataset_eda_status(dataset_id: str) -> EdaStatusResponse:
+async def get_dataset_eda_status(dataset_id: str, version_id: Optional[str] = Query(None)) -> EdaStatusResponse:
     """Retrieve execution status for the latest EDA report of this dataset."""
     from app.services.eda_service import eda_service
 
-    report = eda_service.get_latest_report_for_dataset(dataset_id)
+    report = eda_service.get_latest_report_for_dataset(dataset_id, version_id)
     if not report:
         raise DatasetEdaNotFoundError(dataset_id)
     status_res = eda_service.get_report_status(report.id)
@@ -527,11 +536,11 @@ async def get_dataset_eda_status(dataset_id: str) -> EdaStatusResponse:
     response_model=List[EdaFinding],
     summary="Get Dataset EDA Findings",
 )
-async def get_dataset_eda_findings(dataset_id: str) -> List[EdaFinding]:
+async def get_dataset_eda_findings(dataset_id: str, version_id: Optional[str] = Query(None)) -> List[EdaFinding]:
     """Retrieve structured EDA findings for a dataset."""
     from app.services.eda_service import eda_service
 
-    report = eda_service.get_latest_report_for_dataset(dataset_id)
+    report = eda_service.get_latest_report_for_dataset(dataset_id, version_id)
     if not report:
         raise DatasetEdaNotFoundError(dataset_id)
     return report.findings

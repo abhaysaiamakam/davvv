@@ -169,15 +169,15 @@ class ClassMetadataSummary(BaseModel):
 class DatasetOverview(BaseModel):
     dataset_id: str
     dataset_name: str
-    total_discovered_files: int
-    total_valid_images: int
-    total_invalid_images: int
-    class_count: int
-    classes_with_images: int
-    empty_class_count: int
-    format_count: int
-    unique_dimension_count: int
-    total_size_bytes: int
+    total_discovered_files: Optional[int] = None
+    total_valid_images: Optional[int] = None
+    total_invalid_images: Optional[int] = None
+    class_count: Optional[int] = None
+    classes_with_images: Optional[int] = None
+    empty_class_count: Optional[int] = None
+    format_count: Optional[int] = None
+    unique_dimension_count: Optional[int] = None
+    total_size_bytes: Optional[int] = None
     total_size_human: str
     analysis_id: Optional[str]
     quality_assessment_id: Optional[str]
@@ -206,6 +206,8 @@ class EdaReport(BaseModel):
     dataset_id: str
     dataset_name: str
     version_id: Optional[str] = None
+    modality: str = "image"
+    tabular_summary: Optional[Dict[str, Any]] = None
     source_analysis_id: Optional[str]
     source_quality_assessment_id: Optional[str]
     status: EdaStatus
@@ -214,12 +216,12 @@ class EdaReport(BaseModel):
     duration_ms: Optional[float]
     methodology_version: str = "v1.0"
     overview: DatasetOverview
-    class_distribution: ClassDistributionAnalysis
-    dimension_analysis: DimensionStats
-    aspect_ratio_analysis: AspectRatioAnalysis
-    format_analysis: FormatAnalysis
-    color_analysis: ColorAnalysis
-    file_size_analysis: FileSizeStats
+    class_distribution: Optional[ClassDistributionAnalysis] = None
+    dimension_analysis: Optional[DimensionStats] = None
+    aspect_ratio_analysis: Optional[AspectRatioAnalysis] = None
+    format_analysis: Optional[FormatAnalysis] = None
+    color_analysis: Optional[ColorAnalysis] = None
+    file_size_analysis: Optional[FileSizeStats] = None
     class_metadata: List[ClassMetadataSummary]
     findings: List[EdaFinding]
     warnings: List[str]
@@ -231,8 +233,8 @@ class EdaReportSummary(BaseModel):
     status: EdaStatus
     created_at: str
     completed_at: Optional[str]
-    total_valid_images: int
-    class_count: int
+    total_valid_images: Optional[int] = None
+    class_count: Optional[int] = None
     findings_count: int
 
 

@@ -87,18 +87,25 @@ class AnalysisService:
                 return None
         return None
 
-    def get_latest_analysis_for_dataset(self, dataset_id: str) -> Optional[UnifiedAnalysisResult]:
-        """Retrieve the latest analysis result for a dataset."""
+    def get_latest_analysis_for_dataset(
+        self, dataset_id: str, version_id: Optional[str] = None
+    ) -> Optional[UnifiedAnalysisResult]:
+        """Retrieve the latest analysis result, scoped to the selected version."""
+        if version_id is None:
+            from app.services.dataset_service import dataset_service
+            dataset = dataset_service.get_dataset(dataset_id)
+            version_id = dataset.current_version_id if dataset else None
         latest_id = self.storage.get_latest_analysis_id_for_dataset(dataset_id)
         if latest_id:
             res = self.get_analysis(latest_id)
-            if res:
+            if res and (version_id is None or res.version_id == version_id):
                 return res
 
         # Fallback: scan in-memory analyses for dataset_id
         matching = [
             res for res in self._analyses.values()
-            if res.dataset_id == dataset_id or (getattr(res, "dataset_id", "") == dataset_id)
+            if (res.dataset_id == dataset_id or getattr(res, "dataset_id", "") == dataset_id)
+            and (version_id is None or res.version_id == version_id)
         ]
         if matching:
             matching.sort(key=lambda r: str(r.created_at), reverse=True)
@@ -157,6 +164,7 @@ class AnalysisService:
         result = UnifiedAnalysisResult(
             id=analysis_id,
             dataset_id=dataset.id,
+            version_id=dataset.current_version_id,
             dataset_name=dataset.name,
             status=AnalysisStatus.RUNNING,
             created_at=now,

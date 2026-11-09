@@ -167,7 +167,7 @@ export default function DatasetsPage() {
     setDetectingDuplicates(true);
     setDuplicateError(null);
     try {
-      const result = await apiClient.detectDuplicates(selectedDataset.id);
+      const result = await apiClient.detectDuplicates(selectedDataset.id, selectedDataset.current_version_id ?? undefined);
       setDuplicateResult(result);
       await fetchDatasets();
     } catch (err: unknown) {
@@ -761,7 +761,11 @@ export default function DatasetsPage() {
                       </div>
 
                       {/* Zero Duplicate State */}
-                      {duplicateResult.exact_duplicate_groups === 0 ? (
+                      {duplicateResult.hashing_failures > 0 ? (
+                        <div role="status" className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-4 text-xs text-amber-200">
+                          Duplicate analysis is incomplete: {duplicateResult.hashing_failures} file(s) could not be hashed. {duplicateResult.exact_duplicate_groups} duplicate groups were found among {duplicateResult.successfully_hashed_images} successfully hashed files.
+                        </div>
+                      ) : duplicateResult.exact_duplicate_groups === 0 ? (
                         <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 p-4 text-center">
                           <CheckCircle2 className="h-6 w-6 text-emerald-400 mx-auto mb-2" />
                           <h4 className="text-xs font-semibold text-emerald-200">

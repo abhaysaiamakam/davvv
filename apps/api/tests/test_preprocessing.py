@@ -8,7 +8,9 @@ source immutability, and re-analysis pipeline integration.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
+import time
 from pathlib import Path
 import pytest
 from fastapi import status
@@ -69,6 +71,7 @@ def sample_tabular_dataset(storage, tmp_path):
 
 def test_tabular_missing_value_imputation_preview_and_apply(client: TestClient, sample_tabular_dataset):
     ds_id, ds_dir = sample_tabular_dataset
+    original_hash = hashlib.sha256((ds_dir / "data.csv").read_bytes()).hexdigest()
 
     # Preview mean imputation
     preview_req = {
@@ -89,6 +92,8 @@ def test_tabular_missing_value_imputation_preview_and_apply(client: TestClient, 
     assert len(data["operations"]) == 1
     op_res = data["operations"][0]
     assert op_res["affected_rows"] == 1
+    assert op_res["before_metrics"]["missing_value_samples"][0]["source_row_position"] == 2
+    assert op_res["before_metrics"]["missing_value_samples"][0]["missing_cells"][0]["representation"] == "empty_string"
 
     # Apply imputation
     apply_req = {
@@ -108,6 +113,43 @@ def test_tabular_missing_value_imputation_preview_and_apply(client: TestClient, 
     apply_data = apply_resp.json()
     assert apply_data["status"] == "completed"
     assert "derived_version_id" in apply_data
+    deadline = time.monotonic() + 5
+    job_resp = client.get(f"/api/v1/jobs/{apply_data['job_id']}")
+    while job_resp.status_code == 200 and job_resp.json()["status"] not in ("completed", "failed") and time.monotonic() < deadline:
+        time.sleep(0.02)
+        job_resp = client.get(f"/api/v1/jobs/{apply_data['job_id']}")
+    assert job_resp.status_code == 200 and job_resp.json()["status"] == "completed", job_resp.text
+    from app.services.dataset_service import dataset_service
+    assert dataset_service.get_version(ds_id, apply_data["derived_version_id"]).status.value == "ready"
+    from app.services.data_quality_service import data_quality_service
+    from app.services.eda_service import eda_service
+    assert data_quality_service.get_latest_assessment_for_dataset(ds_id, apply_data["derived_version_id"]).version_id == apply_data["derived_version_id"]
+    assert eda_service.get_latest_report_for_dataset(ds_id, apply_data["derived_version_id"]).version_id == apply_data["derived_version_id"]
+    assert hashlib.sha256((ds_dir / "data.csv").read_bytes()).hexdigest() == original_hash
+
+
+def test_tabular_quality_and_eda_are_real_and_version_scoped(client: TestClient, sample_tabular_dataset):
+    ds_id, _ = sample_tabular_dataset
+    from app.services.dataset_service import dataset_service
+    version_id = next(v.version_id for v in dataset_service.list_versions(ds_id) if v.version_number == 1)
+    quality = client.post(f"/api/v1/datasets/{ds_id}/quality-assessments?version_id={version_id}")
+    assert quality.status_code == status.HTTP_200_OK, quality.text
+    qa = quality.json()
+    assert qa["modality"] == "tabular"
+    assert qa["version_id"] == version_id
+    assert qa["quality_score"]["overall_score"] == 93.33
+    assert qa["integrity"]["total_validated_images"] is None
+    assert sum(f["observed_value"] for f in qa["findings"] if f["metric_name"] == "missing_value_count") == 2
+    assert all(f["missing_value_samples"] for f in qa["findings"] if f["metric_name"] == "missing_value_count")
+
+    eda = client.post(f"/api/v1/datasets/{ds_id}/eda?version_id={version_id}")
+    assert eda.status_code == status.HTTP_200_OK, eda.text
+    report = eda.json()
+    assert report["modality"] == "tabular"
+    assert report["version_id"] == version_id
+    assert report["tabular_summary"]["row_count"] == 6
+    assert report["tabular_summary"]["missing_cell_count"] == 2
+    assert report["overview"]["total_valid_images"] is None
 
 
 def test_tabular_remove_duplicates(client: TestClient, sample_tabular_dataset):

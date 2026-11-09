@@ -11,6 +11,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from app.services.tabular_values import is_missing_value, missing_representation
+
 from app.schemas.insights import (
     DatasetInsight,
     InsightCategory,
@@ -130,27 +132,27 @@ class TabularInsightAnalyzer(BaseInsightAnalyzer):
             return None
 
         total_rows = len(rows)
+        id_column = next((name for name in columns if name.casefold() in {"id", "name", "record_id", "row_id"} or name.casefold().endswith("_id")), None)
         col_stats: Dict[str, Dict[str, Any]] = {}
 
         for col in columns:
             vals = [r.get(col, "") for r in rows]
-            missing = sum(1 for v in vals if v is None or str(v).strip() == "")
-            id_column = next((name for name in columns if name.casefold() in {"id", "record_id", "row_id"} or name.casefold().endswith("_id")), None)
+            missing = sum(1 for v in vals if is_missing_value(v))
             missing_samples = []
             for position, row in enumerate(rows, start=1):
                 raw = row.get(col)
-                if raw is None or str(raw).strip() == "":
+                if is_missing_value(raw):
                     missing_samples.append({
                         "source_row_position": position,
-                        "record_id_column": id_column if id_column and row.get(id_column) not in (None, "") else None,
-                        "record_id": row.get(id_column) if id_column and row.get(id_column) not in (None, "") else None,
+                        "record_id_column": id_column if id_column and not is_missing_value(row.get(id_column)) else None,
+                        "record_id": row.get(id_column) if id_column and not is_missing_value(row.get(id_column)) else None,
                         "missing_column": col,
-                        "missing_representation": "null" if raw is None else "empty_string",
+                        "missing_representation": missing_representation(raw),
                         "row": row,
                     })
                     if len(missing_samples) >= 20:
                         break
-            non_missing = [str(v).strip() for v in vals if v is not None and str(v).strip() != ""]
+            non_missing = [str(v).strip() for v in vals if not is_missing_value(v)]
             unique_vals = set(non_missing)
 
             # Try to parse as numeric
@@ -265,18 +267,23 @@ class TabularInsightAnalyzer(BaseInsightAnalyzer):
                 severity = InsightSeverity.MEDIUM
                 threshold = 20.0
             else:
-                continue
+                severity = InsightSeverity.LOW
+                threshold = 0.0
 
             rule_id = f"missing_values-{col[:30]}{suffix}"
-            evidence = InsightEvidence(
-                metric="missing_value_pct",
-                value=round(pct, 1),
-                unit="percent",
-                threshold=threshold,
-                source_artifact="tabular_file",
-                source_path=f"file:{file_name}/column:{col}",
-                explanation=f"Column '{col}' in '{file_name}' has {round(pct, 1)}% missing values.",
-            )
+            evidence = [
+                InsightEvidence(
+                    metric="missing_value_count", value=col_stats["missing"], unit="cells",
+                    source_artifact="tabular_file", source_path=f"file:{file_name}/column:{col}",
+                    explanation=f"Column '{col}' in '{file_name}' has {col_stats['missing']} missing cells.",
+                ),
+                InsightEvidence(
+                    metric="missing_value_pct", value=round(pct, 1), unit="percent",
+                    threshold=threshold, source_artifact="tabular_file",
+                    source_path=f"file:{file_name}/column:{col}",
+                    explanation=f"Column '{col}' in '{file_name}' has {round(pct, 1)}% missing values.",
+                ),
+            ]
             results.append(
                 DatasetInsight(
                     insight_id=_make_id(dataset_id, version_id, rule_id),
@@ -291,7 +298,7 @@ class TabularInsightAnalyzer(BaseInsightAnalyzer):
                         f"Column '{col}' in '{file_name}' has {round(pct, 1)}% missing values. "
                         "High missingness reduces predictive power and may require imputation or column removal."
                     ),
-                    evidence=[evidence],
+                    evidence=evidence,
                     affected_columns=[col],
                     affected_files=[file_name],
                     missing_value_samples=col_stats.get("missing_samples", []),

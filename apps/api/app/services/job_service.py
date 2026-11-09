@@ -116,7 +116,6 @@ class JobService:
             )
             self._jobs[job_id] = job
             self._persist_job(job)
-
         event_bus.emit(
             DatasetEventType.DATASET_ANALYSIS_QUEUED,
             dataset_id=dataset_id,
@@ -152,7 +151,6 @@ class JobService:
             job.error_message = None
             job.retry_count += 1
             self._persist_job(job)
-
         self._get_executor().submit(self._execute_pipeline, job_id)
         return job
 
@@ -202,6 +200,30 @@ class JobService:
     # -------------------------------------------------------------------------
 
     def _execute_pipeline(self, job_id: str) -> None:
+        job = self.get_job(job_id)
+        if not job:
+            return
+        from app.services.dataset_service import dataset_service
+
+        try:
+            with dataset_service.version_scope(job.dataset_id, job.dataset_version):
+                self._execute_pipeline_scoped(job_id)
+        except Exception as exc:
+            # Invalid or removed version context must become a visible failed job,
+            # not an uncaught worker exception that remains queued forever.
+            job.status = JobStatus.FAILED
+            job.current_stage = JobStage.FAILED
+            job.error_code = type(exc).__name__
+            job.error_message = str(exc)
+            job.completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            self._persist_job(job)
+            try:
+                if dataset_service.get_version(job.dataset_id, job.dataset_version):
+                    dataset_service.mark_version_failed(job.dataset_id, job.dataset_version, str(exc))
+            except Exception:
+                logger.exception("Could not mark invalid job version as failed")
+
+    def _execute_pipeline_scoped(self, job_id: str) -> None:
         """
         Background worker routine running M2 -> M3 -> M4 sequentially.
         Ensures intermediate progress is tracked, exceptions are caught, and events are emitted.
@@ -227,6 +249,8 @@ class JobService:
             job.started_at = now_str
             job.progress_pct = 15.0
             self._persist_job(job)
+        from app.services.dataset_service import dataset_service
+        dataset_service.mark_version_analyzing(job.dataset_id, job.dataset_version)
 
         event_bus.emit(
             DatasetEventType.DATASET_ANALYSIS_STARTED,
@@ -236,6 +260,42 @@ class JobService:
         )
 
         try:
+            # Tabular-only datasets follow their actual tabular analytics path;
+            # they must not enter image decoding/validation with fabricated counts.
+            dataset_obj = dataset_service.get_dataset(job.dataset_id)
+            from app.services.preprocessing.preprocessing_registry import preprocessing_registry
+            dataset_root = self.storage.resolve_dataset_path(dataset_obj)
+            modalities = {item.value for item in preprocessing_registry.detect_modalities(dataset_root)}
+            if "tabular" in modalities and "image" not in modalities:
+                from app.services.visualizations import visualization_service
+                from app.services.insights import insights_service
+                job.current_stage = JobStage.QUALITY_LAB
+                job.progress_pct = 55.0
+                self._persist_job(job)
+                quality_res = data_quality_service.assess_dataset(job.dataset_id, force_refresh=True)
+                job.artifact_refs["quality_id"] = quality_res.id
+                job.artifact_refs["quality_assessment_id"] = quality_res.id
+                job.current_stage = JobStage.EDA_ENGINE
+                job.progress_pct = 75.0
+                self._persist_job(job)
+                eda_res = eda_service.run_eda(job.dataset_id, force_refresh=True)
+                job.artifact_refs["eda_id"] = eda_res.id
+                job.artifact_refs["eda_report_id"] = eda_res.id
+                vis_col = visualization_service.generate_visualizations(job.dataset_id, job.dataset_version, force_refresh=True)
+                job.artifact_refs["visualization_id"] = vis_col.id
+                ins_col = insights_service.generate_insights(job.dataset_id, job.dataset_version, force_refresh=True)
+                job.artifact_refs["insights_id"] = ins_col.id
+                now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                dataset_service.mark_version_ready(job.dataset_id, job.dataset_version,
+                    source_analysis_id=None, source_quality_id=quality_res.id, source_eda_id=eda_res.id,
+                    image_count=None, class_count=None)
+                job.status = JobStatus.COMPLETED
+                job.current_stage = JobStage.COMPLETED
+                job.progress_pct = 100.0
+                job.completed_at = now
+                self._persist_job(job)
+                return
+
             # 1. M2 Discovery
             logger.info(f"[{job_id}] Stage 1/6: Running dataset discovery for {job.dataset_id}")
             discovery_res = dataset_service.discover_dataset(job.dataset_id)
@@ -350,15 +410,8 @@ class JobService:
             duration = round((time.perf_counter() - start_time) * 1000, 2)
             completion_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-            with self._lock:
-                job.status = JobStatus.COMPLETED
-                job.current_stage = JobStage.COMPLETED
-                job.progress_pct = 100.0
-                job.completed_at = completion_time
-                job.duration_ms = duration
-                self._persist_job(job)
-
-            # Update dataset version status to READY
+            # Persist the version's final lifecycle state before advertising the
+            # processing job as complete to API clients.
             dataset_service.mark_version_ready(
                 dataset_id=job.dataset_id,
                 version_id=job.dataset_version,
@@ -368,6 +421,14 @@ class JobService:
                 image_count=val_res.total_validated_images if val_res else (discovery_res.discovered_image_files or 0),
                 class_count=discovery_res.discovered_class_directories or 0,
             )
+
+            with self._lock:
+                job.status = JobStatus.COMPLETED
+                job.current_stage = JobStage.COMPLETED
+                job.progress_pct = 100.0
+                job.completed_at = completion_time
+                job.duration_ms = duration
+                self._persist_job(job)
 
             # Emit completion event
             event_bus.emit(
