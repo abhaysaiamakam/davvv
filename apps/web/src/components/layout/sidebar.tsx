@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, Database, FileDown, FileText, GitCompare, Lightbulb, ScanSearch, ShieldCheck, Sprout, Upload, WandSparkles, Gauge, BriefcaseBusiness, Images } from "lucide-react";
+import { Activity, BarChart3, Database, FileDown, FileText, GitCompare, Lightbulb, ScanSearch, ShieldCheck, Sprout, Upload, WandSparkles, Gauge, BriefcaseBusiness, Images, Presentation } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   ["Dashboard", "/", BarChart3], ["Datasets", "/datasets", Database], ["Data Quality", "/quality", ShieldCheck],
   ["Visual Explorer", "/explorer", Images],
+  ["Phase 1 Dataset Submission", "/phase1", Presentation],
   ["EDA Studio", "/eda", ScanSearch], ["Insights", "/insights", Lightbulb], ["Preprocessing", "/preprocessing", WandSparkles],
   ["Feature Engineering", "/features", Activity], ["Comparison", "/comparison", GitCompare], ["Readiness", "/readiness", Gauge],
   ["Reports", "/reports", FileText], ["Export Center", "/exports", FileDown], ["Job Center", "/jobs", BriefcaseBusiness], ["Upload dataset", "/analyze", Upload],

@@ -38,6 +38,19 @@ def test_image_listing_is_paged_class_aware_and_does_not_return_paths(tmp_path):
     assert str(tmp_path) not in result.model_dump_json()
 
 
+def test_image_listing_filters_crop_using_version_relative_class_hierarchy(tmp_path, monkeypatch):
+    _make_image(tmp_path / "Rice" / "Disease" / "Brown_spot" / "rice.jpg")
+    _make_image(tmp_path / "Maize" / "Disease" / "Leaf_blight" / "maize.jpg")
+    service = ImageExplorerService()
+    monkeypatch.setattr(service, "_version_root", lambda dataset_id, version_id: tmp_path)
+
+    rice = service.list_images("dataset-a", "version-a", page_size=10, crop="Rice")
+
+    assert rice.total == 1
+    assert rice.items[0].filename == "rice.jpg"
+    assert rice.items[0].class_name == "Rice/Disease/Brown_spot"
+
+
 def test_image_id_lookup_is_bound_to_files_inside_version(tmp_path):
     _make_image(tmp_path / "class-a" / "image.png")
     service = ImageExplorerService()

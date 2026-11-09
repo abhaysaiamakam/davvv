@@ -37,6 +37,7 @@ import type {
   ImageAnnotationResponse,
   ExportCreateRequest,
   ExportJob,
+  DuplicateAnalysisResult,
 } from "@croplens/shared-types";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -78,7 +79,7 @@ export const apiClient = {
   getDatasets: () => request<DatasetListResponse>("/datasets"),
   getDataset: (id: string) => request<DatasetMetadata>(`/datasets/${encodeURIComponent(id)}`),
   getDatasetVersions: (id: string) => request<DatasetVersionListResponse>(`/datasets/${encodeURIComponent(id)}/versions`),
-  getImages: (datasetId: string, versionId: string, options: { page?: number; page_size?: number; class_name?: string; annotation_class_id?: string; search?: string; sort_by?: "filename" | "file_size" | "width" | "height"; descending?: boolean } = {}) => {
+  getImages: (datasetId: string, versionId: string, options: { page?: number; page_size?: number; class_name?: string; crop?: string; annotation_class_id?: string; search?: string; sort_by?: "filename" | "file_size" | "width" | "height"; descending?: boolean } = {}) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(options)) if (value !== undefined && value !== "") query.set(key, String(value));
     return request<DatasetImageListResponse>(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/images?${query.toString()}`);
@@ -90,6 +91,7 @@ export const apiClient = {
   discoverDataset: (id: string) => request<DatasetDiscoveryResult>(`/datasets/${encodeURIComponent(id)}/discover`, { method: "POST" }),
   validateDataset: (id: string) => request<NonNullable<DatasetMetadata["validation"]>>(`/datasets/${encodeURIComponent(id)}/validate`, { method: "POST" }),
   detectDuplicates: (id: string, version?: string) => request<NonNullable<DatasetMetadata["duplicates"]>>(`/datasets/${encodeURIComponent(id)}/duplicates/detect${version ? `?version_id=${encodeURIComponent(version)}` : ""}`, { method: "POST" }),
+  getDuplicates: (id: string, version?: string) => request<DuplicateAnalysisResult>(`/datasets/${encodeURIComponent(id)}/duplicates${version ? `?version_id=${encodeURIComponent(version)}` : ""}`),
   detectNearDuplicates: (id: string) => request<NearDuplicateAnalysisResult>(`/datasets/${encodeURIComponent(id)}/near-duplicates/detect`, json({})),
   getNearDuplicates: (id: string) => request<NearDuplicateAnalysisResult>(`/datasets/${encodeURIComponent(id)}/near-duplicates`),
   uploadDataset: (file: File, name?: string, datasetId?: string, onProgress?: (percent: number) => void) => {
@@ -129,6 +131,7 @@ export const apiClient = {
   getInsights: (id: string, version?: string) => request<InsightCollectionResponse>(version
     ? `/datasets/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/insights`
     : `/datasets/${encodeURIComponent(id)}/insights`),
+  regenerateInsights: (id: string, version?: string) => request<InsightCollectionResponse>(`/datasets/${encodeURIComponent(id)}/insights/regenerate${version ? `?version_id=${encodeURIComponent(version)}` : ""}`, { method: "POST" }),
   getInsight: (id: string, insightId: string) => request<DatasetInsight>(`/datasets/${encodeURIComponent(id)}/insights/${encodeURIComponent(insightId)}`),
   getReadiness: (id: string, version?: string) => request<DatasetReadinessAssessment>(version
     ? `/datasets/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/readiness`

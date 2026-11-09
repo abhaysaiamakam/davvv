@@ -5,7 +5,7 @@ import { BookOpen, ScanSearch, RefreshCw } from "lucide-react";
 import { useApiHealth } from "@/hooks/use-api-health";
 import { useEffect, useState } from "react";
 
-const routeNames: Record<string, string> = { "/": "Dashboard", "/datasets": "Datasets", "/quality": "Data Quality", "/eda": "EDA Studio", "/insights": "Insights", "/comparison": "Dataset Comparison", "/reports": "Reports", "/analyze": "Dataset Upload", "/preprocessing": "Preprocessing", "/features": "Feature Engineering", "/readiness": "Readiness", "/jobs": "Job Center" };
+const routeNames: Record<string, string> = { "/": "Dashboard", "/datasets": "Datasets", "/quality": "Data Quality", "/eda": "EDA Studio", "/insights": "Insights", "/comparison": "Dataset Comparison", "/reports": "Reports", "/analyze": "Dataset Upload", "/preprocessing": "Preprocessing", "/features": "Feature Engineering", "/readiness": "Readiness", "/jobs": "Job Center", "/phase1": "Phase 1 Dataset Submission" };
 export function Header() {
   const pathname = usePathname();
   const { status, data, refresh } = useApiHealth();

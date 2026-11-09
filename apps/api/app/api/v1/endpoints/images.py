@@ -33,9 +33,10 @@ def list_version_images(
     sort_by: str = Query("filename", pattern="^(filename|file_size|width|height)$"),
     descending: bool = Query(False),
     annotation_class_id: str | None = Query(None, max_length=80),
+    crop: str | None = Query(None, max_length=80),
 ) -> DatasetImageListResponse:
     return image_explorer_service.list_images(
-        dataset_id, version_id, page, page_size, class_name, search, sort_by, descending, annotation_class_id
+        dataset_id, version_id, page, page_size, class_name, search, sort_by, descending, annotation_class_id, crop
     )
 
 

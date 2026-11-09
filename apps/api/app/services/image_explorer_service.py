@@ -105,12 +105,16 @@ class ImageExplorerService:
         sort_by: str = "filename",
         descending: bool = False,
         annotation_class_id: Optional[str] = None,
+        crop: Optional[str] = None,
     ) -> DatasetImageListResponse:
         root = self._version_root(dataset_id, version_id)
         records = self._records(root)
         counts = Counter(item[1] for item in records)
         classes = [ImageClassCount(class_name=name, image_count=count) for name, count in sorted(counts.items(), key=lambda pair: pair[0].casefold())]
         selected = records
+        if crop:
+            crop_prefix = crop.strip().casefold() + "/"
+            selected = [item for item in selected if item[1].casefold().startswith(crop_prefix)]
         if class_name:
             selected = [item for item in selected if item[1] == class_name]
         if search:
