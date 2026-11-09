@@ -21,6 +21,7 @@ import {
   Copy,
   Files,
   GitCompare,
+  UploadCloud,
 } from "lucide-react";
 import { apiClient, ApiClientError } from "@/lib/api-client";
 import {

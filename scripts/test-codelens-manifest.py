@@ -18,7 +18,7 @@ class CodeLensManifestTests(unittest.TestCase):
             with self.subTest(key=key):
                 permitted = allowed[key][0] if key in allowed else frontend[key][0]
                 self.assertEqual(item["source_file"], permitted)
-                self.assertTrue(item["source_file"].startswith(("apps/api/app/services/", "apps/web/src/components/ui/")))
+                self.assertTrue(item["source_file"].startswith(("apps/api/app/services/", "apps/web/src/components/ui/", "apps/web/src/app/explorer/")))
                 self.assertNotIn("..", item["source_file"].split("/"))
                 self.assertFalse(Path(item["source_file"]).is_absolute())
 
@@ -40,7 +40,8 @@ class CodeLensManifestTests(unittest.TestCase):
                     tree = __import__("ast").parse("\n".join(source))
                     owner = next(node for node in tree.body if isinstance(node, __import__("ast").ClassDef) and node.name == class_name)
                     method = next(node for node in owner.body if isinstance(node, (__import__("ast").FunctionDef, __import__("ast").AsyncFunctionDef)) and node.name == method_name)
-                    self.assertEqual(item["function_line_start"], method.lineno)
+                    expected_start = min([method.lineno, *(decorator.lineno for decorator in method.decorator_list)])
+                    self.assertEqual(item["function_line_start"], expected_start)
                     self.assertEqual(item["function_line_end"], method.end_lineno)
                 else:
                     _, symbol, *_ = frontend[key]

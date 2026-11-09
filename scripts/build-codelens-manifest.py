@@ -27,6 +27,8 @@ ALLOWLIST = {
     "feature.correlation": ("apps/api/app/services/feature_engineering/tabular_feature_operations.py", "CorrelationRedundancyOperation", "preview"),
     "feature.pca": ("apps/api/app/services/feature_engineering/tabular_feature_operations.py", "PrincipalComponentAnalysisOperation", "preview"),
     "readiness.assessment": ("apps/api/app/services/readiness_service.py", "ReadinessService", "assess_readiness", "overall_score = int(sum(d.score"),
+    "images.gallery": ("apps/api/app/services/image_explorer_service.py", "ImageExplorerService", "list_images", "counts = Counter"),
+    "images.annotations": ("apps/api/app/services/image_explorer_service.py", "ImageExplorerService", "_annotation_index", "COCO provides source category names"),
 }
 FRONTEND_ALLOWLIST = {
     "renderer.visualization": (
@@ -34,6 +36,18 @@ FRONTEND_ALLOWLIST = {
         "VisualizationChart",
         "export function VisualizationChart(",
         "\nfunction Fallback(",
+    ),
+    "images.gallery.ui": (
+        "apps/web/src/app/explorer/page.tsx",
+        "VisualExplorerPage class distribution and gallery controls",
+        "{classes.length > 0 && <DashboardCard title=\"Discovered class distribution\"",
+        "{!classes.length && !error && <EmptyState",
+    ),
+    "images.annotations.ui": (
+        "apps/web/src/app/explorer/page.tsx",
+        "VisualExplorerPage annotation overlay and evidence controls",
+        "aria-label=\"Image annotations\"><div className=\"flex flex-wrap items-center justify-between gap-2\"",
+        "</section>\n          <div className=\"grid grid-cols-2 gap-2 sm:grid-cols-4\"",
     ),
 }
 

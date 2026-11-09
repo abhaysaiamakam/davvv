@@ -7,6 +7,7 @@ for large image classification and annotation datasets.
 from __future__ import annotations
 
 import io
+import hashlib
 import logging
 from pathlib import Path
 from typing import Optional, Tuple
@@ -29,6 +30,7 @@ class ImageThumbnailService:
         dataset_root: Path,
         relative_image_path: str,
         max_dim: int = 300,
+        cache_root: Optional[Path] = None,
     ) -> Tuple[Path, str]:
         """
         Locate or generate a thumbnail image on disk.
@@ -40,10 +42,14 @@ class ImageThumbnailService:
         if not image_path.is_file() or dataset_root.resolve() not in image_path.parents:
             raise FileNotFoundError(f"Image '{relative_image_path}' not found in dataset root.")
 
-        thumb_dir = dataset_root / ".thumbnails" / f"dim_{max_dim}"
+        # Keep generated artifacts outside the immutable source version.
+        thumb_dir = (cache_root or (dataset_root / ".thumbnails")) / f"dim_{max_dim}"
         thumb_dir.mkdir(parents=True, exist_ok=True)
 
-        thumb_filename = f"{image_path.stem}_{image_path.stat().st_size}_{max_dim}.jpg"
+        cache_key = hashlib.sha256(
+            f"{image_path}:{image_path.stat().st_mtime_ns}:{image_path.stat().st_size}:{max_dim}".encode()
+        ).hexdigest()
+        thumb_filename = f"{cache_key}.jpg"
         thumb_path = thumb_dir / thumb_filename
 
         if thumb_path.exists() and thumb_path.stat().st_size > 0:

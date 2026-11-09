@@ -35,6 +35,7 @@ from app.schemas.preprocessing import (
     PreprocessingPreviewResponse,
     OperationPreviewResult,
     OperationStatus,
+    PreprocessingOperationType,
 )
 from app.schemas.dataset import DatasetStatus
 from app.storage.base import StorageBackend
@@ -42,6 +43,7 @@ from app.storage.local import storage_backend
 from app.services.preprocessing.preprocessing_registry import preprocessing_registry
 from app.services.dataset_service import dataset_service
 from app.services.upload_service import upload_service
+from app.services.preprocessing.annotation_preprocessing import _find_coco_files, _find_yolo_files
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,19 @@ class PreprocessingService:
 
     def __init__(self, backend: Optional[StorageBackend] = None):
         self.storage: StorageBackend = backend or storage_backend
+
+    @staticmethod
+    def _validate_annotation_linked_image_operations(dataset_root: Path, operations) -> None:
+        unsafe = {
+            PreprocessingOperationType.RESIZE_IMAGES,
+            PreprocessingOperationType.CONVERT_FORMAT,
+        }
+        if not any(operation.operation_type in unsafe for operation in operations):
+            return
+        if _find_coco_files(dataset_root) or _find_yolo_files(dataset_root):
+            raise PreprocessingValidationError(
+                "Resize and format conversion are unavailable for COCO/YOLO-linked images until the linked annotations can be updated safely."
+            )
 
     def get_available_operations(self, dataset_id: str) -> AvailableOperationsResponse:
         """List all preprocessing operations applicable to the dataset's detected modalities."""
@@ -88,6 +103,7 @@ class PreprocessingService:
 
         if not source_path.exists():
             raise FileNotFoundError(f"Source dataset path {source_path} does not exist.")
+        self._validate_annotation_linked_image_operations(source_path, req.operations)
 
         # Create temporary sandbox directory for preview simulations
         temp_preview_dir = self.storage.results_dir / "temp_preview" / uuid.uuid4().hex[:8]
@@ -163,6 +179,7 @@ class PreprocessingService:
 
         if not source_path.exists():
             raise FileNotFoundError(f"Source dataset path {source_path} does not exist.")
+        self._validate_annotation_linked_image_operations(source_path, req.operations)
 
         input_fingerprint = upload_service.compute_content_fingerprint(source_path)
 

@@ -695,7 +695,7 @@ class RemoveDuplicatesOperation(BasePreprocessingOperation):
             reader_expr = tabular_engine._get_sql_reader_target(f_path)
             
             # Use ROW_NUMBER to partition by subset and filter
-            partition_cols = ", ".join([f'"{c}"' for c in subset]) if subset else "*"
+            partition_cols = ", ".join([f'"{c}"' for c in subset]) if subset else "COLUMNS(*)"
             
             if keep == "first":
                 query = f"""

@@ -30,6 +30,10 @@ import type {
   ReportGenerateRequest,
   ReadinessAssessRequest,
   VisualizationCollectionResponse,
+  DatasetImageListResponse,
+  ImagePreviewOperation,
+  ImagePreprocessingPreviewResponse,
+  ImageAnnotationResponse,
 } from "@croplens/shared-types";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -71,6 +75,15 @@ export const apiClient = {
   getDatasets: () => request<DatasetListResponse>("/datasets"),
   getDataset: (id: string) => request<DatasetMetadata>(`/datasets/${encodeURIComponent(id)}`),
   getDatasetVersions: (id: string) => request<DatasetVersionListResponse>(`/datasets/${encodeURIComponent(id)}/versions`),
+  getImages: (datasetId: string, versionId: string, options: { page?: number; page_size?: number; class_name?: string; annotation_class_id?: string; search?: string; sort_by?: "filename" | "file_size" | "width" | "height"; descending?: boolean } = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(options)) if (value !== undefined && value !== "") query.set(key, String(value));
+    return request<DatasetImageListResponse>(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/images?${query.toString()}`);
+  },
+  getImage: (datasetId: string, versionId: string, imageId: string) => request<DatasetImageListResponse["items"][number]>(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/images/${encodeURIComponent(imageId)}`),
+  getImageAnnotations: (datasetId: string, versionId: string, imageId: string) => request<ImageAnnotationResponse>(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/images/${encodeURIComponent(imageId)}/annotations`),
+  imageAssetUrl: (path: string) => `${API_BASE}${path}`,
+  previewImagePreprocessing: (datasetId: string, versionId: string, imageId: string, operation: ImagePreviewOperation) => request<ImagePreprocessingPreviewResponse>(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/images/${encodeURIComponent(imageId)}/preprocessing-preview`, json({ operation: { ...operation, modality: "image" } })),
   discoverDataset: (id: string) => request<DatasetDiscoveryResult>(`/datasets/${encodeURIComponent(id)}/discover`, { method: "POST" }),
   validateDataset: (id: string) => request<NonNullable<DatasetMetadata["validation"]>>(`/datasets/${encodeURIComponent(id)}/validate`, { method: "POST" }),
   detectDuplicates: (id: string) => request<NonNullable<DatasetMetadata["duplicates"]>>(`/datasets/${encodeURIComponent(id)}/duplicates/detect`, { method: "POST" }),

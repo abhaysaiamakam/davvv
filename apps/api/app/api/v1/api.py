@@ -6,12 +6,12 @@ from app.api.v1.endpoints import (
     eda,
     feature_engineering,
     health,
+    images,
     jobs,
     preprocessing,
     quality,
     readiness,
     reports,
-    thumbnails,
 )
 
 api_router = APIRouter()
@@ -27,4 +27,4 @@ api_router.include_router(preprocessing.router, prefix="/datasets", tags=["Prepr
 api_router.include_router(feature_engineering.router, prefix="/datasets", tags=["FeatureEngineering"])
 api_router.include_router(readiness.router, prefix="/datasets", tags=["Readiness"])
 api_router.include_router(reports.router, prefix="/datasets", tags=["Reports"])
-api_router.include_router(thumbnails.router, prefix="", tags=["Thumbnails"])
+api_router.include_router(images.router, prefix="", tags=["Images"])
