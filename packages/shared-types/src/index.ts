@@ -10,4 +10,7 @@ export * from './visualization';
 export * from './insights';
 export * from './readiness';
 export * from './reports';
+export * from './preprocessing';
+export * from './feature-engineering';
+export * from './codelens';
 

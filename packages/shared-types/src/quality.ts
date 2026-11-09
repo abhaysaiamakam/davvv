@@ -16,8 +16,8 @@ export interface QualityFinding {
   title: string;
   explanation: string;
   metric_name: string;
-  observed_value: any;
-  expected_value?: any;
+  observed_value: unknown;
+  expected_value?: unknown;
   threshold_used?: string | null;
   affected_classes: string[];
   affected_image_samples: string[];
@@ -51,8 +51,8 @@ export interface ClassImbalanceAssessment {
   imbalance_ratio: number | null;
   coefficient_of_variation: number | null;
   imbalance_severity: string;
-  underrepresented_classes: Array<Record<string, any>>;
-  overrepresented_classes: Array<Record<string, any>>;
+  underrepresented_classes: Array<Record<string, unknown>>;
+  overrepresented_classes: Array<Record<string, unknown>>;
   class_distribution: Record<string, number>;
   evaluation_notes: string[];
 }
@@ -102,7 +102,7 @@ export interface QualityScoreComponent {
   weight: number;
   weighted_score: number;
   explanation: string;
-  metrics_used: Record<string, any>;
+  metrics_used: Record<string, unknown>;
 }
 
 export interface TransparentQualityScore {

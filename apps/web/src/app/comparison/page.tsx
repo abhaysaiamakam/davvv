@@ -1,89 +1,27 @@
-import React from "react";
-import { GitCompare, Layers, Split, Microscope } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import { GitCompare, LoaderCircle, RefreshCw } from "lucide-react";
+import type { DatasetComparisonReport } from "@croplens/shared-types";
+import { apiClient } from "@/lib/api-client";
+import { useDatasetContext } from "@/hooks/use-dataset-context";
 import { PageContainer } from "@/components/layout/page-container";
 import { DashboardCard } from "@/components/ui/dashboard-card";
+import { ErrorState } from "@/components/ui/error-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingState } from "@/components/ui/loading-state";
 
-export default function ComparisonPage() {
-  const comparisonAxes = [
-    {
-      title: "Field vs Laboratory Domain Shift",
-      icon: Microscope,
-      desc: "Comparing the controlled-environment imagery of PlantVillage against real in-the-wild agricultural field conditions of ICAR and Paddy Doctor.",
-    },
-    {
-      title: "Class Taxonomy & Nomenclature Alignment",
-      icon: Split,
-      desc: "Cross-mapping pathogen classifications across datasets (e.g. Rice Blast vs Pyricularia oryzae, Brown Spot vs Bipolaris oryzae) to identify semantic labeling divergence.",
-    },
-    {
-      title: "Resolution & Optical Device Uniformity",
-      icon: Layers,
-      desc: "Evaluating sensor resolution variance across datasets, contrasting high-end DSLR captures with farmer-sourced mobile smartphone captures.",
-    },
-  ];
-
-  return (
-    <PageContainer
-      title="Dataset Comparison"
-      description="Cross-dataset intelligence comparing ICAR Rice & Maize reference standards with supplementary global and regional datasets."
-      badge="Benchmarking Suite"
-    >
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {comparisonAxes.map((axis) => {
-          const Icon = axis.icon;
-          return (
-            <DashboardCard
-              key={axis.title}
-              title={axis.title}
-              icon={<Icon className="h-4 w-4" />}
-              badge={{ text: "Cross-Domain", variant: "default" }}
-            >
-              <p className="text-xs text-zinc-300 leading-relaxed">{axis.desc}</p>
-            </DashboardCard>
-          );
-        })}
-      </div>
-
-      <DashboardCard
-        title="Comparative Cohort Matrix (Planned M3 Milestone)"
-        icon={<GitCompare className="h-4 w-4" />}
-        badge={{ text: "Architecture Staged", variant: "neutral" }}
-        description="Dataset pairs queued for comparative domain generalization analysis."
-      >
-        <div className="overflow-x-auto text-xs">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-croplens-border-subtle text-zinc-400">
-                <th className="pb-2.5 font-medium">Primary Reference</th>
-                <th className="pb-2.5 font-medium">Comparison Target</th>
-                <th className="pb-2.5 font-medium">Comparison Focus</th>
-                <th className="pb-2.5 font-medium">Planned Pipeline</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-croplens-border-subtle/50 text-zinc-300">
-              <tr className="hover:bg-croplens-card-hover/40">
-                <td className="py-2.5 font-medium text-emerald-300">ICAR Rice</td>
-                <td className="py-2.5">Paddy Doctor</td>
-                <td className="py-2.5 text-zinc-400">Field condition mobile capture vs ICAR field stations</td>
-                <td className="py-2.5 font-mono text-[11px] text-zinc-400">pHash + Feature Embeddings</td>
-              </tr>
-              <tr className="hover:bg-croplens-card-hover/40">
-                <td className="py-2.5 font-medium text-emerald-300">ICAR Rice</td>
-                <td className="py-2.5">Mendeley Rice</td>
-                <td className="py-2.5 text-zinc-400">Laboratory controlled background vs field pathology</td>
-                <td className="py-2.5 font-mono text-[11px] text-zinc-400">Color Space + Histogram Shift</td>
-              </tr>
-              <tr className="hover:bg-croplens-card-hover/40">
-                <td className="py-2.5 font-medium text-emerald-300">ICAR Maize</td>
-                <td className="py-2.5">PlantVillage Maize</td>
-                <td className="py-2.5 text-zinc-400">Leaf blight lesion morphology & leaf segmentation</td>
-                <td className="py-2.5 font-mono text-[11px] text-zinc-400">Geometry + Resolution Matrix</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </DashboardCard>
-    </PageContainer>
-  );
-}
-
+export default function ComparisonPage(){const ctx=useDatasetContext();const [other,setOther]=useState("");const [report,setReport]=useState<DatasetComparisonReport|null>(null);const [loading,setLoading]=useState(true);const [running,setRunning]=useState(false);const [error,setError]=useState<string|null>(null);
+ useEffect(()=>{if(!other&&ctx.datasets.length>1){setOther(ctx.datasets.find(d=>d.id!==ctx.selectedId)?.id??"");}},[ctx.datasets,ctx.selectedId,other]);
+ useEffect(()=>{let cancelled=false;async function loadSaved(){setLoading(true);setError(null);try{const data=await apiClient.listComparisons();const item=data.items.find(row=>(row.dataset_a_id===ctx.selectedId&&row.dataset_b_id===other)||(row.dataset_a_id===other&&row.dataset_b_id===ctx.selectedId));if(item){const result=await apiClient.compareDatasets({dataset_a_id:item.dataset_a_id,dataset_b_id:item.dataset_b_id});if(!cancelled)setReport(result)}else if(!cancelled)setReport(null)}catch(issue){if(!cancelled){setReport(null);setError(issue instanceof Error?issue.message:"Unable to load comparison history.")}}finally{if(!cancelled)setLoading(false)}}void loadSaved();return()=>{cancelled=true}},[ctx.selectedId,other]);
+ async function compare(){if(!ctx.selectedId||!other||ctx.selectedId===other)return;setRunning(true);setError(null);try{setReport(await apiClient.compareDatasets({dataset_a_id:ctx.selectedId,dataset_b_id:other}));}catch(issue){setError(issue instanceof Error?issue.message:"Comparison failed.");}finally{setRunning(false)}}
+ const overview=report?.overview;return <PageContainer title="Dataset Comparison" description="Compare supported backend metrics across two analyzed datasets, including scale, class distribution, image characteristics, and quality." badge="M5 comparison engine">
+  {ctx.error&&<ErrorState title="Dataset registry unavailable" message={ctx.error} onRetry={()=>void ctx.reload()}/>}{error&&<ErrorState title="Comparison unavailable" message={error}/>}
+  <div className="grid gap-4 rounded-xl border border-croplens-border bg-white p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><label className="text-xs font-medium text-zinc-400">Dataset A<select value={ctx.selectedId} onChange={e=>ctx.select(e.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-croplens-border bg-white px-3 text-sm text-zinc-100">{ctx.datasets.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="text-xs font-medium text-zinc-400">Dataset B<select value={other} onChange={e=>setOther(e.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-croplens-border bg-white px-3 text-sm text-zinc-100"><option value="">Select another dataset</option>{ctx.datasets.filter(d=>d.id!==ctx.selectedId).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><button disabled={running||!ctx.selectedId||!other} onClick={()=>void compare()} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-xs font-semibold text-white hover:bg-emerald-800 disabled:bg-gray-300">{running?<LoaderCircle size={14} className="animate-spin"/>:<GitCompare size={14}/>}Compare</button></div>
+  {loading?<LoadingState label="Checking saved comparisons…"/>:report?<><div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400"><span>{report.dataset_a_name} ({report.source_version_a??"version not reported"}) <span className="px-1">↔</span> {report.dataset_b_name} ({report.source_version_b??"version not reported"})</span><span>{report.status} · {report.freshness_status} · {report.methodology_version}</span></div>
+    {overview?<DashboardCard title="Overview metrics" icon={<GitCompare size={17}/>}><div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-xs"><thead><tr className="border-b border-croplens-border text-zinc-400"><th className="pb-2">Metric</th><th className="pb-2">{report.dataset_a_name}</th><th className="pb-2">{report.dataset_b_name}</th><th className="pb-2">Difference</th></tr></thead><tbody className="divide-y divide-croplens-border">{Object.entries(overview).map(([key,value])=><tr key={key}><td className="py-2.5 capitalize text-zinc-100">{key.replaceAll("_"," ")}</td><td className="py-2.5 font-mono text-zinc-400">{value.dataset_a_value??"Unavailable"}</td><td className="py-2.5 font-mono text-zinc-400">{value.dataset_b_value??"Unavailable"}</td><td className="py-2.5 font-mono text-zinc-400">{value.absolute_diff??"Unavailable"}{value.pct_change!==null?` (${value.pct_change.toFixed(1)}%)`:""}</td></tr>)}</tbody></table></div></DashboardCard>:<EmptyState icon={<GitCompare/>} title="Comparison metrics unavailable" description="The backend report did not include shared overview metrics for this pair."/>}
+    <div className="grid gap-5 xl:grid-cols-2">{[["Class alignment",report.class_distribution?.alignment.shared_classes.length??0,report.class_distribution?.alignment.only_in_a.length??0,report.class_distribution?.alignment.only_in_b.length??0], ["Quality comparison",report.data_quality?.is_quality_available?"Available":"Unavailable",report.data_quality?.quality_tier_a??"—",report.data_quality?.quality_tier_b??"—"]].map(([title,a,b,c])=><DashboardCard key={String(title)} title={String(title)} icon={<GitCompare size={17}/>}><div className="grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-gray-50 p-3"><p className="text-lg font-semibold text-zinc-100">{a}</p><p className="text-[10px] text-zinc-400">shared classes / status</p></div><div className="rounded-lg bg-gray-50 p-3"><p className="text-sm font-semibold text-zinc-100">{b}</p><p className="text-[10px] text-zinc-400">{title==="Class alignment"?"only in A":"A quality tier"}</p></div><div className="rounded-lg bg-gray-50 p-3"><p className="text-sm font-semibold text-zinc-100">{c}</p><p className="text-[10px] text-zinc-400">{title==="Class alignment"?"only in B":"B quality tier"}</p></div></div></DashboardCard>)}</div>
+    <DashboardCard title="Comparison findings" icon={<GitCompare size={17}/>} badge={{text:`${report.findings.length} findings`,variant:"neutral"}}>{report.findings.length?<div className="divide-y divide-croplens-border">{report.findings.map(f=><article key={f.id} className="py-3 first:pt-0"><div className="flex gap-2"><span className="text-[10px] uppercase text-zinc-400">{f.category.replaceAll("_"," ")}</span><span className="text-[10px] capitalize text-amber-800">{f.severity}</span></div><h3 className="mt-1 text-sm font-semibold text-zinc-100">{f.title}</h3><p className="mt-1 text-xs text-zinc-400">{f.explanation}</p>{f.recommended_action&&<p className="mt-1 text-xs text-emerald-800">Suggested: {f.recommended_action}</p>}</article>)}</div>:<p className="text-xs text-zinc-400">No findings were returned.</p>}</DashboardCard>
+    {report.warnings.map((w,i)=><p key={i} className="text-xs text-amber-800">{w}</p>)}
+  </>:<EmptyState icon={<GitCompare/>} title="No saved comparison" description="Choose two different analyzed datasets and run a comparison. Metrics unavailable from either source are preserved as unavailable." action={{label:running?"Comparing…":"Run comparison",onClick:()=>void compare()}}/>}
+ </PageContainer>}

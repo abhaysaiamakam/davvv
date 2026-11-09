@@ -15,7 +15,9 @@
     "lint:web": "npm run lint --workspace=apps/web",
     "type-check:web": "npm run type-check --workspace=apps/web",
     "dev:api": "bash scripts/dev-backend.sh",
-    "test:api": "bash scripts/test-backend.sh"
+    "test:api": "bash scripts/test-backend.sh",
+    "codelens:manifest": "python3 scripts/build-codelens-manifest.py",
+    "test:codelens": "python3 scripts/test-codelens-manifest.py"
   }
 }
 

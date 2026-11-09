@@ -22,7 +22,7 @@ export interface ReadinessDimensionAssessment {
   dimension: ReadinessDimension;
   status: ReadinessStatus;
   score: number;
-  metrics: Record<string, any>;
+  metrics: Record<string, unknown>;
   blocking_issues: string[];
   warnings: string[];
   recommendations: string[];

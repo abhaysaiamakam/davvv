@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "python3 ../../scripts/build-codelens-manifest.py",
     "dev": "next dev -p 3000 -H 0.0.0.0",
+    "prebuild": "python3 ../../scripts/build-codelens-manifest.py",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

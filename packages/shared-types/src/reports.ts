@@ -40,27 +40,27 @@ export interface QualitySection {
   corrupted_files_count: number;
   duplicate_count: number;
   class_imbalance_ratio?: number | null;
-  findings: Record<string, any>[];
+  findings: Record<string, unknown>[];
   warnings: string[];
 }
 
 export interface EdaSection {
-  distributions_summary: Record<string, any>;
-  relationships_summary: Record<string, any>;
+  distributions_summary: Record<string, unknown>;
+  relationships_summary: Record<string, unknown>;
   visualization_count: number;
   visualization_refs: string[];
-  eda_findings: Record<string, any>[];
+  eda_findings: Record<string, unknown>[];
 }
 
 export interface InsightsSection {
   total_insights: number;
   category_counts: Record<string, number>;
-  insights: Record<string, any>[];
+  insights: Record<string, unknown>[];
 }
 
 export interface PreprocessingSection {
   operations_applied_count: number;
-  applied_operations: Record<string, any>[];
+  applied_operations: Record<string, unknown>[];
   source_version_id?: string | null;
   derived_version_id?: string | null;
   remaining_quality_concerns: string[];
@@ -73,14 +73,14 @@ export interface FeatureEngineeringSection {
   removed_features: string[];
   pca_component_count?: number | null;
   pca_explained_variance_ratio?: number[] | null;
-  feature_operations: Record<string, any>[];
+  feature_operations: Record<string, unknown>[];
 }
 
 export interface MethodologyStep {
   step_number: number;
   stage_name: string;
   operation_name: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   input_version_id?: string | null;
   output_version_id?: string | null;
   affected_count?: number | null;
@@ -120,7 +120,7 @@ export interface AnalyticalReport {
   feature_engineering_section: FeatureEngineeringSection;
   readiness_section: DatasetReadinessAssessment;
   methodology_section: MethodologySection;
-  conclusion_section: Record<string, any>;
+  conclusion_section: Record<string, unknown>;
   created_at: string;
 }
 

@@ -19,16 +19,16 @@ export function PageContainer({
   className,
 }: PageContainerProps) {
   return (
-    <div className={cn("mx-auto max-w-7xl space-y-6 p-6", className)}>
+    <div className={cn("mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6 lg:p-8", className)}>
       {(title || description || actions) && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-croplens-border-subtle pb-5">
           <div>
             <div className="flex items-center gap-2.5">
               {title && (
-                <h2 className="text-xl font-bold tracking-tight text-white">{title}</h2>
+                <h2 className="text-xl font-bold tracking-tight text-zinc-100">{title}</h2>
               )}
               {badge && (
-                <span className="rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-0.5 text-xs font-semibold text-emerald-300">
+                <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
                   {badge}
                 </span>
               )}

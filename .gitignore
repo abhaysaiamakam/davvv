@@ -66,3 +66,7 @@ Icon
 *.swp
 *.swo
 
+# Keep the frontend source modules (the generic `lib/` rule above is for build artifacts).
+!apps/web/src/lib/
+!apps/web/src/lib/**
+

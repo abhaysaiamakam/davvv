@@ -1,98 +1,64 @@
-import React from "react";
-import {
-  BarChart3,
-  PieChart,
-  ScatterChart,
-  Palette,
-  ActivitySquare,
-  Sparkles,
-} from "lucide-react";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { BarChart3, LoaderCircle, RefreshCw, ScanSearch } from "lucide-react";
+import type { EdaReport, VisualizationCollectionResponse } from "@croplens/shared-types";
+import { apiClient, ApiClientError } from "@/lib/api-client";
+import { useDatasetContext } from "@/hooks/use-dataset-context";
+import { WorkspaceDatasetSelect } from "@/components/ui/workspace-dataset-select";
+import { VisualizationChart } from "@/components/ui/visualization-chart";
 import { PageContainer } from "@/components/layout/page-container";
 import { DashboardCard } from "@/components/ui/dashboard-card";
+import { LoadingState } from "@/components/ui/loading-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { formatDate } from "@/lib/utils";
+import { CodeLensExplainability } from "@/components/ui/codelens";
 
 export default function EDAPage() {
-  const visualizationPlans = [
-    {
-      title: "Class Distribution & Imbalance",
-      icon: BarChart3,
-      desc: "Interactive distribution charts showing sample balance across rice and maize disease classes, highlighting severe underrepresented foliar pathogen classes.",
-      engine: "Apache ECharts Bar / Treemap",
-    },
-    {
-      title: "Resolution & Aspect Ratio Scatter",
-      icon: ScatterChart,
-      desc: "2D scatter plot mapping pixel width vs height, with kernel density contours to identify multi-camera clustering and resolution outliers.",
-      engine: "Apache ECharts Scatter + Density Contours",
-    },
-    {
-      title: "Color Space & Foliar Hue Profiling",
-      icon: Palette,
-      desc: "RGB, HSV, and LAB color space distributions to evaluate lighting variability, shadow intensity, and background green/brown foliar hue separation.",
-      engine: "NumPy / OpenCV Histogram Engine",
-    },
-    {
-      title: "Foliar Lesion Spatial Distribution",
-      icon: ActivitySquare,
-      desc: "Bounding box spatial density maps for annotated disease spots, revealing photographer center-bias and edge-clipping tendencies.",
-      engine: "Apache ECharts Heatmap Matrix",
-    },
-  ];
-
-  return (
-    <PageContainer
-      title="EDA & Visualizations"
-      description="Exploratory Data Analysis workbench for agricultural disease datasets. Visualizations will be powered by Apache ECharts once the Python data engine computes feature distributions."
-      badge="Visualization Workbench"
-    >
-      <div className="rounded-xl border border-croplens-border bg-croplens-card p-5">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-800/40 bg-emerald-950/40 text-emerald-400">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white">
-              Data Science Visualization Foundation
-            </h3>
-            <p className="mt-1 text-xs text-zinc-300 leading-relaxed">
-              In accordance with Milestone 1 specifications, charts with fabricated analytical data are strictly omitted. The visualization engine is prepared to ingest verified Pandas/NumPy distributions computed by the backend service.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {visualizationPlans.map((plan) => {
-          const Icon = plan.icon;
-          return (
-            <DashboardCard
-              key={plan.title}
-              title={plan.title}
-              icon={<Icon className="h-4 w-4" />}
-              badge={{ text: "ECharts Specification", variant: "default" }}
-            >
-              <div className="space-y-3">
-                <p className="text-xs text-zinc-300 leading-relaxed">{plan.desc}</p>
-                <div className="flex items-center justify-between rounded border border-croplens-border-subtle bg-zinc-950/40 px-3 py-2 text-[11px]">
-                  <span className="text-zinc-400">Chart Technology:</span>
-                  <span className="font-mono text-emerald-300">{plan.engine}</span>
-                </div>
-              </div>
-            </DashboardCard>
-          );
-        })}
-      </div>
-
-      {/* Primary ICAR Target Focus */}
-      <DashboardCard
-        title="Primary Analytical Target: ICAR Rice & Maize"
-        icon={<PieChart className="h-4 w-4" />}
-        badge={{ text: "Primary Benchmark", variant: "emerald" }}
-      >
-        <p className="text-xs text-zinc-300 leading-relaxed">
-          The exploratory analysis workbench will provide in-depth comparative profiling between ICAR Rice (Bacterial Blight, Brown Spot, Leaf Blast) and ICAR Maize (Maydis Leaf Blight, Turcicum Leaf Blight, Banded Leaf and Sheath Blight) against laboratory benchmarks like PlantVillage.
-        </p>
+  const ctx = useDatasetContext();
+  const [report, setReport] = useState<EdaReport | null>(null);
+  const [charts, setCharts] = useState<VisualizationCollectionResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    if (!ctx.selectedId) return;
+    setLoading(true); setError(null);
+    const [eda, visualizations] = await Promise.allSettled([apiClient.getEda(ctx.selectedId), apiClient.getVisualizations(ctx.selectedId)]);
+    if (eda.status === "fulfilled") setReport(eda.value); else setReport(null);
+    if (visualizations.status === "fulfilled") setCharts(visualizations.value); else setCharts(null);
+    const reasons = [eda.status === "rejected" && !(eda.reason instanceof ApiClientError && eda.reason.status === 404) ? eda.reason : null, visualizations.status === "rejected" && !(visualizations.reason instanceof ApiClientError && visualizations.reason.status === 404) ? visualizations.reason : null].filter(Boolean);
+    if (reasons.length) setError(reasons[0] instanceof Error ? reasons[0].message : "EDA data unavailable.");
+    setLoading(false);
+  }, [ctx.selectedId]);
+  useEffect(() => { void load(); }, [load]);
+  async function run() {
+    if (!ctx.selectedId) return;
+    setRunning(true); setError(null);
+    try {
+      setReport(await apiClient.runEda(ctx.selectedId));
+      setCharts(await apiClient.getVisualizations(ctx.selectedId));
+    } catch (issue) { setError(issue instanceof Error ? issue.message : "EDA run failed."); }
+    finally { setRunning(false); }
+  }
+  return <PageContainer title="EDA Studio" description="Explore backend generated distributions, dataset structure, and evidence-backed EDA findings." badge="Exploratory analysis" actions={<div className="w-full sm:w-72"><WorkspaceDatasetSelect datasets={ctx.datasets} value={ctx.selectedId} onChange={ctx.select} loading={ctx.loading}/></div>}>
+    {ctx.error && <ErrorState title="Dataset registry unavailable" message={ctx.error} onRetry={() => void ctx.reload()}/>}
+    {error && <ErrorState title="EDA data unavailable" message={error} onRetry={() => void load()}/>}
+    {loading ? <LoadingState label="Loading dataset analysis and chart specifications…"/> : report ? <>
+      <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs leading-relaxed text-blue-950"><span className="font-semibold">Artifact scope:</span> the EDA report endpoint returns the latest dataset-level report and does not include a version ID. Each visualization below includes its own dataset version. CropLens keeps those provenance labels separate.</div>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Valid images",report.overview.total_valid_images],["Classes",report.overview.class_count],["Files",report.overview.total_discovered_files],["EDA findings",report.findings.length]].map(([label,value])=><div key={String(label)} className="rounded-xl border border-croplens-border bg-white p-4"><p className="text-xs text-zinc-400">{label}</p><p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p></div>)}</section>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400"><span>{report.dataset_name} · analysis {report.id}</span><span>Generated {formatDate(report.completed_at ?? report.created_at)} · {report.methodology_version}</span></div>
+      <section className="grid gap-5 lg:grid-cols-2">{charts?.items.length ? charts.items.map((spec)=>{
+        const explanationId=spec.category==="class_distribution"?"eda.class_distribution":spec.category==="image_geometry"?"eda.dimensions":spec.category==="format_and_color"?"eda.color":spec.category==="tabular_distribution"?"eda.tabular":null;
+        const provenance: Array<[string,string|number|null|undefined]>=[["Visualization ID",spec.visualization_id],["Chart type",spec.chart_type],...Object.entries(spec.source_artifacts??{})];
+        return <DashboardCard key={spec.visualization_id} title={spec.title} icon={<BarChart3 size={17}/>} badge={{text:spec.chart_type.replaceAll("_"," "),variant:"neutral"}} description={spec.description}><VisualizationChart spec={spec}/><div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-croplens-border pt-3 text-[10px] text-zinc-400"><div className="flex flex-wrap gap-1.5"><span>Version {spec.dataset_version}</span>{spec.source_artifacts && Object.entries(spec.source_artifacts).map(([key,value])=>value&&<span key={key} className="rounded bg-gray-100 px-2 py-1">{key}: {value}</span>)}</div>{explanationId&&<CodeLensExplainability explanationId={explanationId} resultTitle={spec.title} datasetVersion={spec.dataset_version} provenance={provenance}/>}</div></DashboardCard>
+      }) : <div className="lg:col-span-2"><EmptyState icon={<ScanSearch/>} title="No chart specifications returned" description="The API has no supported chart data for this dataset yet. The EDA report below remains available."/></div>}</section>
+      <DashboardCard title="EDA findings" icon={<ScanSearch size={17}/>} badge={{text:`${report.findings.length} findings`,variant:"emerald"}}>
+        {report.findings.length ? <div className="divide-y divide-croplens-border">{report.findings.map((finding)=><article key={finding.id} className="py-4 first:pt-0 last:pb-0"><div className="flex flex-wrap gap-2"><span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium capitalize text-gray-600">{finding.category.replaceAll("_"," ")}</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium capitalize text-amber-800">{finding.severity}</span></div><h3 className="mt-2 text-sm font-semibold text-zinc-100">{finding.title}</h3><p className="mt-1 text-xs leading-relaxed text-zinc-400">{finding.explanation}</p><p className="mt-2 text-xs text-zinc-400">Recommended action: {finding.recommended_action}</p></article>)}</div> : <p className="text-xs text-zinc-400">No EDA findings were returned.</p>}
       </DashboardCard>
-    </PageContainer>
-  );
+      {report.warnings.length>0&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><p className="font-semibold">Analysis notes</p>{report.warnings.map((item,i)=><p className="mt-1" key={`${i}-${item}`}>{item}</p>)}</div>}
+    </> : !ctx.loading && ctx.selectedId ? <EmptyState icon={<ScanSearch/>} title="EDA has not been run" description="Run EDA for the selected dataset. The Python analysis engine will return real statistics and findings." action={{label:running?"Running EDA…":"Run EDA",onClick:()=>void run()}}/> : null}
+    {!loading && report && <button disabled={running} onClick={() => void run()} className="inline-flex h-9 items-center gap-2 rounded-lg border border-croplens-border bg-white px-3 text-xs font-medium text-zinc-100 disabled:opacity-50">{running?<LoaderCircle size={14} className="animate-spin"/>:<RefreshCw size={14}/>}Re-run EDA</button>}
+  </PageContainer>;
 }
-

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Database,
   Filter,
@@ -26,6 +27,7 @@ import {
   DatasetListResponse,
   DatasetMetadata,
   DatasetDiscoveryResult,
+  DatasetVersionListResponse,
   DatasetValidationResult,
   DuplicateAnalysisResult,
 } from "@croplens/shared-types";
@@ -41,6 +43,7 @@ export default function DatasetsPage() {
   const [filterCrop, setFilterCrop] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [versions, setVersions] = useState<DatasetVersionListResponse | null>(null);
 
   // Discovery state
   const [discovering, setDiscovering] = useState(false);
@@ -74,9 +77,21 @@ export default function DatasetsPage() {
     fetchDatasets();
   }, []);
 
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("dataset");
+    if (requested) setSelectedDatasetId(requested);
+  }, []);
+
   const items = datasetsData?.items || [];
   const selectedDataset: DatasetMetadata | undefined =
     items.find((d) => d.id === selectedDatasetId) || items[0];
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedDataset?.id) { setVersions(null); return; }
+    apiClient.getDatasetVersions(selectedDataset.id).then((result) => { if (!cancelled) setVersions(result); }).catch(() => { if (!cancelled) setVersions(null); });
+    return () => { cancelled = true; };
+  }, [selectedDataset?.id]);
 
   // Sync existing discovery and validation from dataset state
   useEffect(() => {
@@ -179,6 +194,7 @@ export default function DatasetsPage() {
       title="Dataset Explorer"
       description="Registry of curated agricultural benchmarks and evaluator-uploaded datasets. Initial primary dataset is the ICAR Rice & Maize dataset, supported by supplementary domain benchmarks."
       badge="Curated Catalog"
+      actions={<Link href="/analyze" className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-800"><UploadCloud className="h-3.5 w-3.5"/>Upload dataset</Link>}
     >
       {error && (
         <ErrorState
@@ -231,10 +247,12 @@ export default function DatasetsPage() {
                 const isPrimary = ds.id === "icar-rice-maize";
 
                 return (
-                  <div
+                  <button
                     key={ds.id}
+                    type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedDatasetId(ds.id)}
-                    className={`cursor-pointer rounded-xl border p-4 transition-all duration-150 ${
+                    className={`w-full text-left cursor-pointer rounded-xl border p-4 transition-all duration-150 ${
                       isSelected
                         ? "border-emerald-600/70 bg-emerald-950/30 text-white shadow-sm"
                         : "border-croplens-border bg-croplens-card text-zinc-300 hover:border-emerald-900/50 hover:bg-croplens-card-hover"
@@ -273,7 +291,7 @@ export default function DatasetsPage() {
                         {ds.status}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -459,6 +477,10 @@ export default function DatasetsPage() {
                       </div>
                     </div>
                   </div>
+                </DashboardCard>
+
+                <DashboardCard title="Version history" icon={<Layers className="h-4 w-4" />} badge={{ text: `${versions?.total ?? selectedDataset.total_versions ?? 0} versions`, variant: "neutral" }} description="Analysis artifacts in other workspaces are scoped to a selected version when the API supports it.">
+                  {versions?.items.length ? <div className="divide-y divide-croplens-border-subtle">{versions.items.map((version) => <div key={version.version_id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><div><p className="text-xs font-semibold text-zinc-100">Version {version.version_number}{version.version_id === selectedDataset.current_version_id && <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800">Current</span>}</p><p className="mt-1 font-mono text-[10px] text-zinc-400">{version.version_id}</p><p className="mt-1 text-[10px] text-zinc-400">{formatDate(version.created_at)} · {version.image_count ?? "—"} images · {version.class_count ?? "—"} classes</p></div><span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] capitalize text-gray-600">{version.status}</span></div>)}</div> : <p className="text-xs text-zinc-400">No version records returned for this dataset.</p>}
                 </DashboardCard>
 
                 {/* Validation Real Results Panel */}

@@ -3,34 +3,54 @@
 @tailwind utilities;
 
 :root {
-  --background: #080e0c;
-  --foreground: #f3f4f6;
+  color-scheme: light;
+  --background: #f7f9f7;
+  --foreground: #18221c;
+  --surface: #ffffff;
+  --muted: #64736a;
+  --line: #e4eae5;
+  --green: #237a4b;
 }
 
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+}
+button, a, input, select { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid #86c79e; outline-offset: 2px; }
+::selection { background: #d5efdd; color: #183b27; }
+@keyframes codelens-enter { from { transform: translateX(16px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.codelens-enter { animation: codelens-enter 180ms ease-out both; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-thumb { background: #cad5cc; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Keep the existing page components while migrating their original dark palette. */
+@layer utilities {
+  .bg-croplens-bg { background-color: var(--background) !important; }
+  .bg-croplens-sidebar { background-color: #fff !important; }
+  .bg-croplens-card, .bg-croplens-card\/80, .bg-croplens-card\/60 { background-color: #fff !important; }
+  .bg-croplens-card-hover { background-color: #f3f7f4 !important; }
+  .border-croplens-border, .border-croplens-border-subtle { border-color: var(--line) !important; }
+  .text-zinc-100, .text-zinc-200 { color: #202b24 !important; }
+  .text-zinc-300 { color: #435149 !important; }
+  .text-zinc-400 { color: #66756c !important; }
+  .text-zinc-500 { color: #7b8980 !important; }
+  .bg-zinc-950\/40, .bg-zinc-950\/60, .bg-zinc-900\/40 { background-color: #f7f9f7 !important; }
+  .bg-zinc-800\/40, .bg-zinc-800\/60 { background-color: #f0f4f1 !important; }
+  .border-zinc-700\/40, .border-zinc-700\/50 { border-color: #e2e9e3 !important; }
+  .bg-emerald-950\/40, .bg-emerald-950\/50, .bg-emerald-950\/60, .bg-emerald-950\/80 { background-color: #eff7f0 !important; }
+  .bg-emerald-900\/40, .bg-emerald-900\/50, .bg-emerald-900\/60, .bg-emerald-900\/70 { background-color: #e9f4eb !important; }
+  .border-emerald-800\/40, .border-emerald-800\/50, .border-emerald-800\/60 { border-color: #d5e9da !important; }
+  .text-emerald-300, .text-emerald-400, .text-teal-300 { color: #24764a !important; }
+  .text-emerald-200, .text-teal-200 { color: #216b43 !important; }
+  .text-emerald-100 { color: #286b44 !important; }
 }
 
-/* Crisp dark scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
-
-::-webkit-scrollbar-track {
-  background: #0a110e;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #1c3228;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #254235;
-}
-

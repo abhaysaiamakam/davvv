@@ -54,8 +54,8 @@ export interface VisualizationSpecification {
   x_axis?: AxisSpec | null;
   y_axis?: AxisSpec | null;
   series: SeriesSpec[];
-  chart_data: Record<string, any>[];
-  metadata: Record<string, any>;
+  chart_data: Record<string, unknown>[];
+  metadata: Record<string, unknown>;
   generated_at: string;
   source_artifacts?: Record<string, string | null>;
 }

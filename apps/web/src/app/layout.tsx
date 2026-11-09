@@ -15,12 +15,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-croplens-bg text-zinc-100 antialiased selection:bg-emerald-500/20 selection:text-emerald-300">
+    <html lang="en">
+      <body className="min-h-screen bg-croplens-bg text-zinc-100 antialiased">
         <Sidebar />
-        <div className="pl-64 flex min-h-screen flex-col">
+        <div className="flex min-h-screen flex-col md:pl-[248px]">
           <Header />
-          <main className="flex-1 pb-12">{children}</main>
+          <main className="flex-1 pb-20 md:pb-12">{children}</main>
         </div>
       </body>
     </html>
