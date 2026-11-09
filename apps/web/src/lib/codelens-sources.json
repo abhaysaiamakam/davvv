@@ -255,10 +255,10 @@
   "images.gallery.ui": {
     "source_file": "apps/web/src/app/explorer/page.tsx",
     "source_symbol": "VisualExplorerPage class distribution and gallery controls",
-    "line_start": 145,
-    "line_end": 153,
-    "function_line_start": 145,
-    "function_line_end": 153,
+    "line_start": 146,
+    "line_end": 154,
+    "function_line_start": 146,
+    "function_line_end": 154,
     "is_excerpt": false,
     "code_snippet": "      {classes.length > 0 && <DashboardCard title=\"Discovered class distribution\" icon={<Images size={17}/>} headerAction={<CodeLensExplainability explanationId=\"images.gallery\" resultTitle=\"Discovered image classes\" datasetVersion={version.versionId} provenance={[[\"Images in selected view\", total], [\"Classes discovered\", classes.length]]}/>} description={`Counts are generated from files in version ${version.versionId}. Select a class to filter the gallery.`}>\n        <div className=\"space-y-2\">{classes.map(item => {\n          const width = Math.max(2, total ? (item.image_count / Math.max(...classes.map(c => c.image_count), 1)) * 100 : 2);\n          return <button key={item.class_name} type=\"button\" onClick={() => setClassName(className === item.class_name ? \"\" : item.class_name)} aria-pressed={className === item.class_name} className={`grid w-full grid-cols-[minmax(5rem,1fr)_3fr_3rem] items-center gap-3 rounded-md p-1 text-left text-xs ${className === item.class_name ? \"bg-emerald-50\" : \"hover:bg-gray-50\"}`}><span className=\"truncate font-medium text-zinc-800\">{item.class_name}</span><span className=\"h-2 overflow-hidden rounded-full bg-gray-100\"><span className=\"block h-full rounded-full bg-emerald-600\" style={{ width: `${width}%` }}/></span><span className=\"text-right tabular-nums text-zinc-500\">{item.image_count}</span></button>;\n        })}</div>\n        {className && <button type=\"button\" onClick={() => setClassName(\"\")} className=\"mt-3 text-xs font-medium text-emerald-800\">Clear class filter</button>}\n      </DashboardCard>}\n\n      {!classes.length && !error && <EmptyState icon={<Images/>} title=\"No supported images in this version\" description=\"This version contains no supported image files.\"/>}",
     "language": "typescript"
@@ -266,10 +266,10 @@
   "images.annotations.ui": {
     "source_file": "apps/web/src/app/explorer/page.tsx",
     "source_symbol": "VisualExplorerPage annotation overlay and evidence controls",
-    "line_start": 166,
-    "line_end": 169,
-    "function_line_start": 166,
-    "function_line_end": 169,
+    "line_start": 167,
+    "line_end": 170,
+    "function_line_start": 167,
+    "function_line_end": 170,
     "is_excerpt": false,
     "code_snippet": "          <section className=\"rounded-lg border border-croplens-border p-3\" aria-label=\"Image annotations\"><div className=\"flex flex-wrap items-center justify-between gap-2\"><div><h3 className=\"text-xs font-semibold text-zinc-900\">Annotations</h3><p className=\"mt-1 text-[10px] text-zinc-500\">{annotationLoading ? \"Reading annotation source\u2026\" : annotationError ?? (annotationData ? `${annotationData.annotation_format.toUpperCase()} \u00b7 ${annotationData.annotation_count} objects` : \"No annotation record\")}</p></div><div className=\"flex items-center gap-3\">{annotationData?.annotation_format !== \"none\" && annotationData && <CodeLensExplainability explanationId=\"images.annotations\" resultTitle=\"Image annotation evidence\" datasetVersion={annotationData.version_id} provenance={[[\"Format\", annotationData.annotation_format.toUpperCase()], [\"Objects on this image\", annotationData.annotation_count], [\"Classes in version\", annotationData.classes.length]]}/>}{annotationData?.annotation_count ? <label className=\"flex items-center gap-2 text-xs text-zinc-700\"><input type=\"checkbox\" checked={showAnnotations} onChange={event => setShowAnnotations(event.target.checked)} className=\"accent-emerald-700\"/>Show overlays</label> : null}</div></div>\n            {annotationData?.classes.length ? <div className=\"mt-3 flex flex-wrap gap-2\">{annotationData.classes.map(item=><button key={item.class_id} type=\"button\" onClick={() => { setAnnotationClassId(item.class_id); setClassName(\"\"); setSelected(null); }} className=\"rounded-full bg-gray-100 px-2.5 py-1 text-[10px] text-zinc-700 hover:bg-emerald-50 hover:text-emerald-900\">{item.label ?? `Class ID ${item.class_id}`} \u00b7 {item.annotation_count} boxes / {item.image_count} images \u00b7 show images</button>)}</div> : null}\n            {annotationData?.annotations.length ? <details className=\"mt-3\"><summary className=\"cursor-pointer text-[10px] font-semibold text-emerald-800\">Inspect annotation coordinates</summary><ul className=\"mt-2 space-y-1\">{annotationData.annotations.map(item=><li key={item.annotation_id} className=\"text-[10px] text-zinc-600\">{item.label ?? `Class ID ${item.class_id}`} \u00b7 x {item.x.toFixed(1)}, y {item.y.toFixed(1)}, w {item.width.toFixed(1)}, h {item.height.toFixed(1)} px{item.confidence !== null && item.confidence !== undefined ? ` \u00b7 confidence ${item.confidence.toFixed(3)}` : \"\"}</li>)}</ul></details> : null}\n          </section>",
     "language": "typescript"

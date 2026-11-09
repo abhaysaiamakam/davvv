@@ -14,9 +14,13 @@ import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/utils";
 import { CodeLensExplainability } from "@/components/ui/codelens";
+import { ContextualExportAction } from "@/components/exports/contextual-export-action";
+import { useDatasetVersion } from "@/hooks/use-dataset-version";
+import { WorkspaceVersionSelect } from "@/components/ui/workspace-version-select";
 
 export default function EDAPage() {
   const ctx = useDatasetContext();
+  const version = useDatasetVersion(ctx.selectedId, ctx.selected?.current_version_id);
   const [report, setReport] = useState<EdaReport | null>(null);
   const [charts, setCharts] = useState<VisualizationCollectionResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,24 +29,24 @@ export default function EDAPage() {
   const load = useCallback(async () => {
     if (!ctx.selectedId) return;
     setLoading(true); setError(null);
-    const [eda, visualizations] = await Promise.allSettled([apiClient.getEda(ctx.selectedId), apiClient.getVisualizations(ctx.selectedId)]);
+    const [eda, visualizations] = await Promise.allSettled([apiClient.getEda(ctx.selectedId), apiClient.getVisualizations(ctx.selectedId, version.versionId || undefined)]);
     if (eda.status === "fulfilled") setReport(eda.value); else setReport(null);
     if (visualizations.status === "fulfilled") setCharts(visualizations.value); else setCharts(null);
     const reasons = [eda.status === "rejected" && !(eda.reason instanceof ApiClientError && eda.reason.status === 404) ? eda.reason : null, visualizations.status === "rejected" && !(visualizations.reason instanceof ApiClientError && visualizations.reason.status === 404) ? visualizations.reason : null].filter(Boolean);
     if (reasons.length) setError(reasons[0] instanceof Error ? reasons[0].message : "EDA data unavailable.");
     setLoading(false);
-  }, [ctx.selectedId]);
+  }, [ctx.selectedId, version.versionId]);
   useEffect(() => { void load(); }, [load]);
   async function run() {
     if (!ctx.selectedId) return;
     setRunning(true); setError(null);
     try {
       setReport(await apiClient.runEda(ctx.selectedId));
-      setCharts(await apiClient.getVisualizations(ctx.selectedId));
+      setCharts(await apiClient.getVisualizations(ctx.selectedId, version.versionId || undefined));
     } catch (issue) { setError(issue instanceof Error ? issue.message : "EDA run failed."); }
     finally { setRunning(false); }
   }
-  return <PageContainer title="EDA Studio" description="Explore backend generated distributions, dataset structure, and evidence-backed EDA findings." badge="Exploratory analysis" actions={<div className="w-full sm:w-72"><WorkspaceDatasetSelect datasets={ctx.datasets} value={ctx.selectedId} onChange={ctx.select} loading={ctx.loading}/></div>}>
+  return <PageContainer title="EDA Studio" description="Explore backend generated distributions, dataset structure, and evidence-backed EDA findings." badge="Exploratory analysis" actions={<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto"><div className="grid min-w-0 flex-1 gap-2 sm:w-[32rem] sm:grid-cols-2"><WorkspaceDatasetSelect datasets={ctx.datasets} value={ctx.selectedId} onChange={ctx.select} loading={ctx.loading}/><WorkspaceVersionSelect versions={version.versions} value={version.versionId} onChange={version.select} loading={version.loading}/></div><ContextualExportAction type="eda" versionId={version.versionId}/></div>}>
     {ctx.error && <ErrorState title="Dataset registry unavailable" message={ctx.error} onRetry={() => void ctx.reload()}/>}
     {error && <ErrorState title="EDA data unavailable" message={error} onRetry={() => void load()}/>}
     {loading ? <LoadingState label="Loading dataset analysis and chart specifications…"/> : report ? <>

@@ -65,9 +65,9 @@ class QualitySection(BaseModel):
 
     quality_score: Optional[int] = None
     quality_tier: Optional[str] = None
-    missing_values_count: int = 0
-    corrupted_files_count: int = 0
-    duplicate_count: int = 0
+    missing_values_count: Optional[int] = None
+    corrupted_files_count: Optional[int] = None
+    duplicate_count: Optional[int] = None
     class_imbalance_ratio: Optional[float] = None
     findings: List[Dict[str, Any]] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)

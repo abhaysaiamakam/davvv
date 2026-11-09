@@ -1,5 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Query, Response
+from fastapi import HTTPException
 from app.schemas.reports import (
     AnalyticalReport,
     ReportExportFormat,
@@ -50,7 +51,10 @@ async def get_report(
     report_id: str,
 ) -> AnalyticalReport:
     """Retrieve full analytical report by ID."""
-    return report_service.get_report(report_id)
+    report = report_service.get_report(report_id)
+    if report.dataset_id != dataset_id:
+        raise HTTPException(status_code=404, detail="Report not found for this dataset")
+    return report
 
 
 @router.get(

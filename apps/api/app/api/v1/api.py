@@ -4,6 +4,7 @@ from app.api.v1.endpoints import (
     comparisons,
     datasets,
     eda,
+    exports,
     feature_engineering,
     health,
     images,
@@ -27,4 +28,5 @@ api_router.include_router(preprocessing.router, prefix="/datasets", tags=["Prepr
 api_router.include_router(feature_engineering.router, prefix="/datasets", tags=["FeatureEngineering"])
 api_router.include_router(readiness.router, prefix="/datasets", tags=["Readiness"])
 api_router.include_router(reports.router, prefix="/datasets", tags=["Reports"])
+api_router.include_router(exports.router, prefix="", tags=["Exports"])
 api_router.include_router(images.router, prefix="", tags=["Images"])

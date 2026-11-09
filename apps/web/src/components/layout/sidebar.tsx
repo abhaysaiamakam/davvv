@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, Database, FileText, GitCompare, Lightbulb, ScanSearch, ShieldCheck, Sprout, Upload, WandSparkles, Gauge, BriefcaseBusiness, Images } from "lucide-react";
+import { Activity, BarChart3, Database, FileDown, FileText, GitCompare, Lightbulb, ScanSearch, ShieldCheck, Sprout, Upload, WandSparkles, Gauge, BriefcaseBusiness, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -10,7 +10,7 @@ const items = [
   ["Visual Explorer", "/explorer", Images],
   ["EDA Studio", "/eda", ScanSearch], ["Insights", "/insights", Lightbulb], ["Preprocessing", "/preprocessing", WandSparkles],
   ["Feature Engineering", "/features", Activity], ["Comparison", "/comparison", GitCompare], ["Readiness", "/readiness", Gauge],
-  ["Reports", "/reports", FileText], ["Job Center", "/jobs", BriefcaseBusiness], ["Upload dataset", "/analyze", Upload],
+  ["Reports", "/reports", FileText], ["Export Center", "/exports", FileDown], ["Job Center", "/jobs", BriefcaseBusiness], ["Upload dataset", "/analyze", Upload],
 ] as const;
 
 export function Sidebar() {

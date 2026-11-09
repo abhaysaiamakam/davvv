@@ -34,6 +34,8 @@ import type {
   ImagePreviewOperation,
   ImagePreprocessingPreviewResponse,
   ImageAnnotationResponse,
+  ExportCreateRequest,
+  ExportJob,
 } from "@croplens/shared-types";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -134,6 +136,10 @@ export const apiClient = {
     : `/datasets/${encodeURIComponent(id)}/reports`),
   generateReport: (id: string, body?: Omit<ReportGenerateRequest, "dataset_id">) => request<AnalyticalReport>(`/datasets/${encodeURIComponent(id)}/reports/generate`, json({ dataset_id: id, ...body })),
   reportDownloadUrl: (id: string, reportId: string, format: "pdf" | "json") => `${API_PREFIX}/datasets/${encodeURIComponent(id)}/reports/${encodeURIComponent(reportId)}/download?format=${format}`,
+  createExport: (datasetId: string, versionId: string, body: ExportCreateRequest) => request<ExportJob>(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/exports`, json(body)),
+  listExports: (datasetId: string, versionId: string) => request<ExportJob[]>(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/exports`),
+  getExport: (exportId: string) => request<ExportJob>(`/exports/${encodeURIComponent(exportId)}`),
+  exportDownloadUrl: (exportId: string) => `${API_PREFIX}/exports/${encodeURIComponent(exportId)}/download`,
   listComparisons: () => request<DatasetComparisonListResponse>("/comparisons"),
   compareDatasets: (body: ComparisonCreateRequest) => request<DatasetComparisonReport>("/comparisons", json(body)),
   getPreprocessingOperations: (id: string) => request<AvailableOperationsResponse>(`/datasets/${encodeURIComponent(id)}/preprocessing/operations`),

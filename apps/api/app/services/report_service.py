@@ -67,9 +67,11 @@ class ReportService:
             target_version_id = version.version_id
             ver_num = version.version_number
         else:
-            latest = dataset_service.get_latest_version(req.dataset_id)
-            target_version_id = latest.version_id if latest else "v1"
-            ver_num = latest.version_number if latest else 1
+            version = dataset_service.get_latest_version(req.dataset_id)
+            if not version:
+                raise VersionNotFoundError(req.dataset_id, "latest")
+            target_version_id = version.version_id
+            ver_num = version.version_number
 
         # Check existing cached reports if not force_refresh
         if not req.force_refresh:
@@ -77,7 +79,9 @@ class ReportService:
             if existing_reports:
                 return AnalyticalReport.model_validate(existing_reports[0])
 
-        dataset_dir = self.storage.resolve_dataset_path(dataset)
+        dataset_dir = (self.storage.base_dir / version.storage_relative_path).resolve()
+        if not self.storage.is_safe_path(dataset_dir) or not dataset_dir.is_dir():
+            raise VersionNotFoundError(req.dataset_id, target_version_id)
         from app.services.preprocessing.preprocessing_registry import preprocessing_registry
         modalities = preprocessing_registry.detect_modalities(dataset_dir)
         primary_modality = modalities[0].value if modalities else "tabular"
@@ -87,8 +91,11 @@ class ReportService:
 
         # Collect artifacts across M2 - M9
         readiness_res = readiness_service.assess_readiness(req.dataset_id, target_version_id, req.task_context)
-        quality_res = dataset_service.get_latest_quality_assessment(req.dataset_id)
-        eda_res = dataset_service.get_latest_eda_report(req.dataset_id)
+        # Reuse only artifacts explicitly linked from this immutable version record.
+        from app.services.data_quality_service import data_quality_service
+        from app.services.eda_service import eda_service
+        quality_res = data_quality_service.get_assessment(version.source_quality_id) if version.source_quality_id else None
+        eda_res = eda_service.get_report(version.source_eda_id) if version.source_eda_id else None
         
         # Insights (M7)
         try:
@@ -109,12 +116,14 @@ class ReportService:
             vis_refs = []
 
         # Preprocessing & Feature Engineering History (M8 & M9)
-        prep_history = self.storage.list_persisted_preprocessing_history(req.dataset_id)
+        prep_history = [item for item in self.storage.list_persisted_preprocessing_history(req.dataset_id)
+                        if item.get("derived_version_id") == target_version_id]
         
         try:
             from app.services.feature_engineering.feature_engineering_service import feature_engineering_service
             feat_history_res = feature_engineering_service.list_feature_history(req.dataset_id)
-            feat_history = [item.model_dump() for item in feat_history_res.items]
+            feat_history = [item.model_dump() for item in feat_history_res.items
+                            if item.derived_version_id == target_version_id]
         except Exception:
             feat_history = []
 
@@ -122,8 +131,15 @@ class ReportService:
         from app.services.feature_engineering.feature_registry import feature_registry
         discovered_feats = feature_registry.discover_features(dataset_dir)
         cols = [f.feature_name for f in discovered_feats]
-        classes = dataset.discovery.classes if dataset.discovery else []
-        class_names = [c.class_name for c in classes]
+        from app.services.image_explorer_service import image_explorer_service
+        try:
+            image_index = image_explorer_service.list_images(req.dataset_id, target_version_id, page=1, page_size=1)
+            class_names = [item.class_name for item in image_index.classes]
+        except Exception:
+            class_names = []
+        actual_files = [path for path in dataset_dir.rglob("*") if path.is_file() and not path.is_symlink()
+                        and not any(part.startswith(".") for part in path.relative_to(dataset_dir).parts)]
+        actual_total_bytes = sum(path.stat().st_size for path in actual_files)
 
         # ---------------------------------------------------------------------
         # Construct Section Models
@@ -132,13 +148,13 @@ class ReportService:
             dataset_name=dataset.name,
             dataset_modality=primary_modality,
             dataset_version=target_version_id,
-            total_files=dataset.total_images or (val_res.total_discovered_images if (val_res := dataset.validation) else 0),
-            total_bytes=sum(c.image_count * 1024 for c in classes) if classes else 1024 * 1024,
+            total_files=len(actual_files),
+            total_bytes=actual_total_bytes,
             main_objective=req.task_context.analytical_goal if req.task_context and req.task_context.analytical_goal else "Comprehensive dataset intelligence & preparation for machine learning",
-            key_findings=readiness_res.key_strengths or ["Dataset cataloged and structural integrity verified."],
-            quality_concerns=readiness_res.critical_blockers or [d.warnings[0] for d in readiness_res.dimensions if d.warnings] or ["No severe structural blockers identified."],
+            key_findings=readiness_res.key_strengths,
+            quality_concerns=readiness_res.critical_blockers or [d.warnings[0] for d in readiness_res.dimensions if d.warnings],
             readiness_status=readiness_res.overall_status,
-            recommended_next_steps=readiness_res.recommendations or ["Proceed to model training or downstream processing."],
+            recommended_next_steps=readiness_res.recommendations,
         )
 
         ds_overview = DatasetOverviewSection(
@@ -176,9 +192,9 @@ class ReportService:
         q_section = QualitySection(
             quality_score=q_score,
             quality_tier=q_tier,
-            missing_values_count=0,
-            corrupted_files_count=dataset.corrupted_image_files or 0,
-            duplicate_count=dataset.duplicates.exact_duplicate_groups if dataset.duplicates else 0,
+            missing_values_count=None,
+            corrupted_files_count=quality_res.integrity.total_corrupted_images if quality_res else None,
+            duplicate_count=quality_res.duplicate_impact.exact_duplicate_groups if quality_res else None,
             class_imbalance_ratio=q_imb_ratio,
             findings=q_findings,
             warnings=[d.warnings[0] for d in readiness_res.dimensions if d.warnings],
@@ -297,6 +313,8 @@ class ReportService:
         export_format: ReportExportFormat = ReportExportFormat.JSON,
     ) -> Tuple[bytes, str, str]:
         report = self.get_report(report_id)
+        if report.dataset_id != dataset_id:
+            raise ReportNotFoundError(report_id)
 
         if export_format == ReportExportFormat.PDF:
             pdf_bytes = pdf_export_service.generate_pdf_report(report)

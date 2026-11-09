@@ -14,4 +14,5 @@ export * from './preprocessing';
 export * from './feature-engineering';
 export * from './codelens';
 export * from './image-explorer';
+export * from './exports';
 

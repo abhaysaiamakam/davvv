@@ -11,6 +11,7 @@ import { useDatasetVersion } from "@/hooks/use-dataset-version";
 import { WorkspaceDatasetSelect } from "@/components/ui/workspace-dataset-select";
 import { WorkspaceVersionSelect } from "@/components/ui/workspace-version-select";
 import { CodeLensExplainability } from "@/components/ui/codelens";
+import { ContextualExportAction } from "@/components/exports/contextual-export-action";
 import { PageContainer } from "@/components/layout/page-container";
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -126,7 +127,7 @@ export default function VisualExplorerPage() {
     finally { setApplyBusy(false); }
   }
 
-  return <PageContainer title="Visual Dataset Explorer" description="Inspect the real images, classes, and metadata in a specific uploaded dataset version." badge="Version scoped" actions={<div className="grid w-full gap-2 sm:grid-cols-2 sm:w-[30rem]"><WorkspaceDatasetSelect datasets={context.datasets} value={context.selectedId} onChange={context.select} loading={context.loading}/><WorkspaceVersionSelect versions={version.versions} value={version.versionId} onChange={version.select} loading={version.loading}/></div>}>
+  return <PageContainer title="Visual Dataset Explorer" description="Inspect the real images, classes, and metadata in a specific uploaded dataset version." badge="Version scoped" actions={<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto"><div className="grid min-w-0 flex-1 gap-2 sm:w-[30rem] sm:grid-cols-2"><WorkspaceDatasetSelect datasets={context.datasets} value={context.selectedId} onChange={context.select} loading={context.loading}/><WorkspaceVersionSelect versions={version.versions} value={version.versionId} onChange={version.select} loading={version.loading}/></div><ContextualExportAction type="dataset" versionId={version.versionId}/></div>}>
     {context.error && <ErrorState title="Dataset registry unavailable" message={context.error} onRetry={() => void context.reload()}/>}
     {version.error && <ErrorState title="Dataset versions unavailable" message={version.error} onRetry={() => void version.reload()}/>}
     {!context.loading && !context.selectedId && <EmptyState icon={<Images/>} title="No dataset selected" description="Upload an image dataset or select one from the dataset registry."/>}

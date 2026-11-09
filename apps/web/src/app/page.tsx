@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Activity, ArrowRight, Clock3, Database, FileCheck2, Plus, RefreshCw } from "lucide-react";
+import { Activity, ArrowRight, Clock3, Database, FileCheck2, Plus, RefreshCw, FileDown } from "lucide-react";
 import type { DataQualityAssessment, DatasetListResponse, InsightCollectionResponse, JobListResponse, ReportListResponse } from "@croplens/shared-types";
 import { apiClient } from "@/lib/api-client";
 import { PageContainer } from "@/components/layout/page-container";
@@ -41,7 +41,7 @@ export default function OverviewPage() {
   }, [firstDatasetId]);
   const activeJobs = (jobs?.items ?? []).filter((job) => ["queued", "validating", "processing"].includes(job.status));
   const validated = (datasets?.items ?? []).filter((dataset) => dataset.status === "validated").length;
-  return <PageContainer title="Good morning" description="A clear view of your datasets, analysis activity, and the next step in your workflow." actions={<Link href="/analyze" className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800"><Plus size={16}/>Upload dataset</Link>}>
+  return <PageContainer title="Good morning" description="A clear view of your datasets, analysis activity, and the next step in your workflow." actions={<div className="flex items-center gap-2"><Link href="/exports" className="inline-flex h-10 items-center gap-2 rounded-lg border border-croplens-border bg-white px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-50"><FileDown size={16}/>Export Center</Link><Link href="/analyze" className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800"><Plus size={16}/>Upload dataset</Link></div>}>
     {error && <ErrorState title="Dashboard data unavailable" message={error} onRetry={() => void load()}/>}
     {loading ? <LoadingState label="Loading live workspace data…" rows={4}/> : <>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Workspace summary">

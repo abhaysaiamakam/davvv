@@ -7,6 +7,7 @@ import { apiClient, ApiClientError } from "@/lib/api-client";
 import { useDatasetContext } from "@/hooks/use-dataset-context";
 import { WorkspaceDatasetSelect } from "@/components/ui/workspace-dataset-select";
 import { PageContainer } from "@/components/layout/page-container";
+import { ContextualExportAction } from "@/components/exports/contextual-export-action";
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { ErrorState } from "@/components/ui/error-state";
 import { LoadingState } from "@/components/ui/loading-state";
@@ -37,7 +38,7 @@ export default function QualityLabPage() {
     finally { setRunning(false); }
   }
   const q = assessment;
-  return <PageContainer title="Data Quality" description="Review integrity, class balance, metadata consistency, and duplicate impact from the backend assessment." badge="Evidence-backed" actions={<div className="w-full sm:w-72"><WorkspaceDatasetSelect datasets={ctx.datasets} value={ctx.selectedId} onChange={ctx.select} loading={ctx.loading}/></div>}>
+  return <PageContainer title="Data Quality" description="Review integrity, class balance, metadata consistency, and duplicate impact from the backend assessment." badge="Evidence-backed" actions={<div className="flex w-full items-center gap-2 sm:w-auto"><div className="min-w-0 flex-1 sm:w-64"><WorkspaceDatasetSelect datasets={ctx.datasets} value={ctx.selectedId} onChange={ctx.select} loading={ctx.loading}/></div><ContextualExportAction type="quality" versionId={ctx.selected?.current_version_id}/></div>}>
     {ctx.error && <ErrorState title="Dataset registry unavailable" message={ctx.error} onRetry={() => void ctx.reload()}/>}
     {error && <ErrorState title="Quality data unavailable" message={error} onRetry={() => void load()}/>}
     {loading ? <LoadingState label="Loading quality assessment…"/> : q ? <>

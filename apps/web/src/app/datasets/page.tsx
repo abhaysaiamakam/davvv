@@ -33,6 +33,7 @@ import {
   DuplicateAnalysisResult,
 } from "@croplens/shared-types";
 import { PageContainer } from "@/components/layout/page-container";
+import { ContextualExportAction } from "@/components/exports/contextual-export-action";
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -195,7 +196,7 @@ export default function DatasetsPage() {
       title="Dataset Explorer"
       description="Registry of curated agricultural benchmarks and evaluator-uploaded datasets. Initial primary dataset is the ICAR Rice & Maize dataset, supported by supplementary domain benchmarks."
       badge="Curated Catalog"
-      actions={<Link href="/analyze" className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-800"><UploadCloud className="h-3.5 w-3.5"/>Upload dataset</Link>}
+      actions={<div className="flex items-center gap-2">{selectedDataset?.current_version_id && <ContextualExportAction type="dataset" datasetId={selectedDataset.id} versionId={selectedDataset.current_version_id}/>}<Link href="/analyze" className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-800"><UploadCloud className="h-3.5 w-3.5"/>Upload dataset</Link></div>}
     >
       {error && (
         <ErrorState
