@@ -59,6 +59,14 @@ export interface DatasetInsight {
   affected_classes: string[];
   affected_columns: string[];
   affected_files: string[];
+  missing_value_samples: Array<{
+    source_row_position: number;
+    record_id_column?: string | null;
+    record_id?: string | null;
+    missing_column: string;
+    missing_representation: "null" | "empty_string";
+    row: Record<string, string | null>;
+  }>;
   impact: string;
   recommended_action: string;
   limitations: string;

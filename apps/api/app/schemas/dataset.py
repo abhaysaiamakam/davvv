@@ -128,6 +128,7 @@ class ClassDuplicateMetric(BaseModel):
 class DuplicateAnalysisResult(BaseModel):
     dataset_id: str = Field(..., description="Unique dataset identifier")
     dataset_name: str = Field(..., description="Dataset display name")
+    version_id: Optional[str] = Field(default=None, description="Dataset version snapshot analyzed")
     analysis_timestamp: str = Field(..., description="ISO 8601 UTC timestamp of duplicate analysis")
     total_eligible_images: int = Field(..., description="Total valid images evaluated for duplicate detection")
     successfully_hashed_images: int = Field(..., description="Count of images successfully hashed via SHA-256")
@@ -200,6 +201,7 @@ class PerClassNearDuplicateMetric(BaseModel):
 class NearDuplicateAnalysisResult(BaseModel):
     dataset_id: str = Field(..., description="Unique dataset identifier")
     dataset_name: str = Field(..., description="Dataset display name")
+    version_id: Optional[str] = Field(default=None, description="Dataset version snapshot analyzed")
     analysis_timestamp: str = Field(..., description="ISO 8601 UTC timestamp of near-duplicate analysis")
     algorithm: str = Field(..., description="Perceptual hash algorithm executed")
     hash_size: int = Field(..., description="Hash dimension size")

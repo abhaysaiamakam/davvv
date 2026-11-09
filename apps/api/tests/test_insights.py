@@ -423,6 +423,26 @@ def test_tabular_insights_missing_values(tmp_path):
     missing = [i for i in insights if i.category == InsightCategory.MISSING_VALUES]
     assert len(missing) >= 1
     assert missing[0].severity in (InsightSeverity.MEDIUM, InsightSeverity.HIGH, InsightSeverity.CRITICAL)
+    score = next(item for item in missing if "score" in item.affected_columns)
+    assert score.affected_files == ["sparse.csv"]
+    assert len(score.missing_value_samples) == 20
+    assert score.missing_value_samples[0]["source_row_position"] == 1
+    assert score.missing_value_samples[0]["record_id_column"] == "name"
+    assert score.missing_value_samples[0]["record_id"] == "Alice"
+    assert score.missing_value_samples[0]["missing_column"] == "score"
+    assert score.missing_value_samples[0]["missing_representation"] == "empty_string"
+    assert score.missing_value_samples[0]["row"]["score"] == ""
+
+
+def test_tabular_missing_values_distinguishes_short_row_null_from_empty(tmp_path):
+    csv_path = tmp_path / "nulls.csv"
+    csv_path.write_text("id,score,note\n1,,known\n2,\n3,1,known\n" + "4,,known\n" * 18, encoding="utf-8")
+    analyzer = TabularInsightAnalyzer()
+    insight = next(item for item in analyzer.analyze("tab_ds", "v1", {"dataset_dir": tmp_path}) if item.category == InsightCategory.MISSING_VALUES and "score" in item.affected_columns)
+    by_position = {sample["source_row_position"]: sample for sample in insight.missing_value_samples}
+    assert by_position[1]["missing_representation"] == "empty_string"
+    assert by_position[2]["missing_representation"] == "null"
+    assert by_position[2]["row"]["note"] is None
 
 
 def test_tabular_insights_constant_columns(tmp_path):

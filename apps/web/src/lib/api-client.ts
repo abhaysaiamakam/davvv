@@ -31,6 +31,7 @@ import type {
   ReadinessAssessRequest,
   VisualizationCollectionResponse,
   DatasetImageListResponse,
+  NearDuplicateAnalysisResult,
   ImagePreviewOperation,
   ImagePreprocessingPreviewResponse,
   ImageAnnotationResponse,
@@ -89,6 +90,8 @@ export const apiClient = {
   discoverDataset: (id: string) => request<DatasetDiscoveryResult>(`/datasets/${encodeURIComponent(id)}/discover`, { method: "POST" }),
   validateDataset: (id: string) => request<NonNullable<DatasetMetadata["validation"]>>(`/datasets/${encodeURIComponent(id)}/validate`, { method: "POST" }),
   detectDuplicates: (id: string) => request<NonNullable<DatasetMetadata["duplicates"]>>(`/datasets/${encodeURIComponent(id)}/duplicates/detect`, { method: "POST" }),
+  detectNearDuplicates: (id: string) => request<NearDuplicateAnalysisResult>(`/datasets/${encodeURIComponent(id)}/near-duplicates/detect`, json({})),
+  getNearDuplicates: (id: string) => request<NearDuplicateAnalysisResult>(`/datasets/${encodeURIComponent(id)}/near-duplicates`),
   uploadDataset: (file: File, name?: string, datasetId?: string, onProgress?: (percent: number) => void) => {
     const form = new FormData();
     form.set("file", file);

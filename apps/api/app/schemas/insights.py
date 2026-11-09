@@ -71,6 +71,7 @@ class DatasetInsight(BaseModel):
     affected_classes: List[str] = Field(default_factory=list, description="Dataset classes affected by this insight")
     affected_columns: List[str] = Field(default_factory=list, description="Tabular columns affected (empty for image datasets)")
     affected_files: List[str] = Field(default_factory=list, description="Relative paths of affected files (sample)")
+    missing_value_samples: List[Dict[str, Any]] = Field(default_factory=list, description="Bounded source-row samples for missing-value insights; row numbers are 1-based data-record positions, not synthetic IDs")
     impact: str = Field(..., description="Explanation of downstream ML/training impact")
     recommended_action: str = Field(..., description="Evidence-backed, actionable recommendation")
     limitations: str = Field(

@@ -131,6 +131,7 @@ class DataQualityAssessment(BaseModel):
     id: str = Field(..., description="Unique assessment identifier (e.g. qa-icar-rice-maize-uuid)")
     dataset_id: str = Field(..., description="Associated dataset identifier")
     dataset_name: str = Field(..., description="Human-readable dataset display name")
+    version_id: Optional[str] = Field(default=None, description="Dataset version snapshot used for this assessment")
     source_analysis_id: Optional[str] = Field(default=None, description="Analysis job ID from M2.5 that provided the base data")
     status: AnalysisStatus = Field(default=AnalysisStatus.COMPLETED, description="Assessment execution status")
     created_at: str = Field(..., description="ISO 8601 creation timestamp")

@@ -31,7 +31,9 @@ import {
   DatasetVersionListResponse,
   DatasetValidationResult,
   DuplicateAnalysisResult,
+  NearDuplicateAnalysisResult,
 } from "@croplens/shared-types";
+import { EvidenceImageGrid } from "@/components/evidence/evidence-image-grid";
 import { PageContainer } from "@/components/layout/page-container";
 import { ContextualExportAction } from "@/components/exports/contextual-export-action";
 import { DashboardCard } from "@/components/ui/dashboard-card";
@@ -61,6 +63,9 @@ export default function DatasetsPage() {
   const [detectingDuplicates, setDetectingDuplicates] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [duplicateResult, setDuplicateResult] = useState<DuplicateAnalysisResult | null>(null);
+  const [nearDuplicateResult, setNearDuplicateResult] = useState<NearDuplicateAnalysisResult | null>(null);
+  const [nearDuplicateError, setNearDuplicateError] = useState<string | null>(null);
+  const [detectingNearDuplicates, setDetectingNearDuplicates] = useState(false);
 
   const fetchDatasets = async () => {
     setLoading(true);
@@ -115,6 +120,8 @@ export default function DatasetsPage() {
     setDiscoveryError(null);
     setValidationError(null);
     setDuplicateError(null);
+    setNearDuplicateResult(null);
+    setNearDuplicateError(null);
   }, [selectedDatasetId, selectedDataset]);
 
   const handleRunDiscovery = async () => {
@@ -174,6 +181,15 @@ export default function DatasetsPage() {
     } finally {
       setDetectingDuplicates(false);
     }
+  };
+
+  const handleRunNearDuplicateDetection = async () => {
+    if (!selectedDataset) return;
+    setDetectingNearDuplicates(true);
+    setNearDuplicateError(null);
+    try { setNearDuplicateResult(await apiClient.detectNearDuplicates(selectedDataset.id)); }
+    catch (err) { setNearDuplicateError(err instanceof Error ? err.message : "Near-duplicate detection failed."); }
+    finally { setDetectingNearDuplicates(false); }
   };
 
   const filteredItems = items.filter((d) => {
@@ -375,6 +391,8 @@ export default function DatasetsPage() {
                           )}
                         </button>
                       )}
+
+                      {isValidated && <button type="button" onClick={handleRunNearDuplicateDetection} disabled={detectingNearDuplicates || validating || discovering} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/80 bg-violet-600/20 px-3 py-1.5 text-xs font-semibold text-violet-200 disabled:opacity-50">{detectingNearDuplicates ? "Comparing perceptual hashes…" : "Detect Near-Duplicates"}</button>}
                     </div>
                   }
                 >
@@ -805,6 +823,8 @@ export default function DatasetsPage() {
                                   </div>
                                 </div>
 
+                                {duplicateResult.version_id ? <EvidenceImageGrid datasetId={selectedDataset.id} versionId={duplicateResult.version_id} images={[{relativePath:group.representative.relative_path,label:"Representative",className:group.representative.class_name,fileSizeBytes:group.representative.file_size_bytes},...group.duplicates.map(member=>({relativePath:member.relative_path,label:"Duplicate",className:member.class_name,fileSizeBytes:member.file_size_bytes}))]}/> : <p className="rounded bg-amber-50 p-2 text-[10px] text-amber-900">This stored duplicate report has no version snapshot. Preview withheld to avoid showing images from a different version.</p>}
+
                                 {/* Duplicate Instances */}
                                 <div className="space-y-1">
                                   <span className="text-zinc-400 font-medium text-[11px] block">
@@ -879,6 +899,11 @@ export default function DatasetsPage() {
                     </p>
                   </div>
                 ) : null}
+
+                {nearDuplicateError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">Near-duplicate analysis failed: {nearDuplicateError}</div>}
+                {nearDuplicateResult && <DashboardCard title="Near-duplicate image evidence" badge={{text:`${nearDuplicateResult.near_duplicate_groups} groups`,variant:nearDuplicateResult.near_duplicate_groups ? "amber" : "emerald"}} description={`Perceptual algorithm: ${nearDuplicateResult.algorithm}; Hamming distance threshold: ${nearDuplicateResult.distance_threshold}. Similarity is the backend-provided normalized score.`}>
+                  {!nearDuplicateResult.groups.length ? <p className="text-xs text-zinc-500">No near-duplicate groups were returned.</p> : <div className="space-y-4">{nearDuplicateResult.groups.map(group=><section key={group.group_id} className="rounded-lg border border-croplens-border p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs"><strong>{group.group_id} · {group.algorithm}</strong><span>Max Hamming distance: {group.max_distance_in_group} · Minimum similarity: {group.min_similarity_in_group}</span></div>{nearDuplicateResult.version_id ? <EvidenceImageGrid datasetId={selectedDataset.id} versionId={nearDuplicateResult.version_id} images={[{relativePath:group.representative.relative_path,label:"Representative",className:group.representative.class_name,fileSizeBytes:group.representative.file_size_bytes,detail:"Similarity 1.0 (representative)"},...group.near_duplicates.map(member=>({relativePath:member.relative_path,label:"Near duplicate",className:member.class_name,fileSizeBytes:member.file_size_bytes,detail:`Similarity ${member.similarity_to_representative}; Hamming distance ${member.hamming_distance_to_representative}`}))]}/> : <p className="text-xs text-amber-800">This stored report has no version snapshot; previews are withheld.</p>}</section>)}</div>}
+                </DashboardCard>}
 
                 {/* Discovery Real Results Panel */}
                 {discoveryResult && (

@@ -32,6 +32,7 @@ from app.schemas.eda import (
     FileSizeStats,
     FormatAnalysis,
 )
+from app.services.dataset_service import dataset_service
 from app.storage.local import storage_backend
 
 logger = logging.getLogger(__name__)
@@ -213,6 +214,7 @@ class EdaService:
             id=eda_id,
             dataset_id=dataset_id,
             dataset_name=analysis.dataset_name,
+            version_id=(dataset_service.get_dataset(dataset_id).current_version_id if dataset_service.get_dataset(dataset_id) else None),
             source_analysis_id=analysis.id,
             source_quality_assessment_id=quality_assessment.id if quality_assessment else None,
             status=EdaStatus.COMPLETED,

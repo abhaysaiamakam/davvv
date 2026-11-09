@@ -135,6 +135,21 @@ class TabularInsightAnalyzer(BaseInsightAnalyzer):
         for col in columns:
             vals = [r.get(col, "") for r in rows]
             missing = sum(1 for v in vals if v is None or str(v).strip() == "")
+            id_column = next((name for name in columns if name.casefold() in {"id", "record_id", "row_id"} or name.casefold().endswith("_id")), None)
+            missing_samples = []
+            for position, row in enumerate(rows, start=1):
+                raw = row.get(col)
+                if raw is None or str(raw).strip() == "":
+                    missing_samples.append({
+                        "source_row_position": position,
+                        "record_id_column": id_column if id_column and row.get(id_column) not in (None, "") else None,
+                        "record_id": row.get(id_column) if id_column and row.get(id_column) not in (None, "") else None,
+                        "missing_column": col,
+                        "missing_representation": "null" if raw is None else "empty_string",
+                        "row": row,
+                    })
+                    if len(missing_samples) >= 20:
+                        break
             non_missing = [str(v).strip() for v in vals if v is not None and str(v).strip() != ""]
             unique_vals = set(non_missing)
 
@@ -158,6 +173,7 @@ class TabularInsightAnalyzer(BaseInsightAnalyzer):
                 "total": total_rows,
                 "missing": missing,
                 "missing_pct": (missing / total_rows * 100) if total_rows > 0 else 0.0,
+                "missing_samples": missing_samples,
                 "unique_count": len(unique_vals),
                 "is_numeric": is_numeric,
                 "std": std_val,
@@ -277,6 +293,8 @@ class TabularInsightAnalyzer(BaseInsightAnalyzer):
                     ),
                     evidence=[evidence],
                     affected_columns=[col],
+                    affected_files=[file_name],
+                    missing_value_samples=col_stats.get("missing_samples", []),
                     impact="Missing values degrade model performance and require explicit imputation strategies.",
                     recommended_action=(
                         "Investigate why values are missing (MCAR, MAR, or MNAR). "

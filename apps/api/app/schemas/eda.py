@@ -205,6 +205,7 @@ class EdaReport(BaseModel):
     id: str
     dataset_id: str
     dataset_name: str
+    version_id: Optional[str] = None
     source_analysis_id: Optional[str]
     source_quality_assessment_id: Optional[str]
     status: EdaStatus

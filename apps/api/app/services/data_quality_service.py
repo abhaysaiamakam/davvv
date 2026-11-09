@@ -217,6 +217,7 @@ class DataQualityService:
             id=assessment_id,
             dataset_id=dataset.id,
             dataset_name=dataset.name,
+            version_id=dataset.current_version_id,
             source_analysis_id=analysis.id if analysis else None,
             status=AnalysisStatus.COMPLETED,
             created_at=now,

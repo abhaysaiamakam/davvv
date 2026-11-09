@@ -119,6 +119,7 @@ export interface DataQualityAssessment {
   id: string;
   dataset_id: string;
   dataset_name: string;
+  version_id?: string | null;
   source_analysis_id?: string | null;
   status: AnalysisStatus;
   created_at: string;

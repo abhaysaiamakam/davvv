@@ -122,6 +122,7 @@ export interface ClassDuplicateMetric {
 export interface DuplicateAnalysisResult {
   dataset_id: string;
   dataset_name: string;
+  version_id?: string | null;
   analysis_timestamp: string;
   total_eligible_images: number;
   successfully_hashed_images: number;
@@ -177,6 +178,7 @@ export interface PerClassNearDuplicateMetric {
 export interface NearDuplicateAnalysisResult {
   dataset_id: string;
   dataset_name: string;
+  version_id?: string | null;
   analysis_timestamp: string;
   algorithm: string;
   hash_size: number;

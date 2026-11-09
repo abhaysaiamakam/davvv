@@ -234,6 +234,7 @@ class DuplicateDetectionService:
         return DuplicateAnalysisResult(
             dataset_id=dataset.id,
             dataset_name=dataset.name,
+            version_id=dataset.current_version_id,
             analysis_timestamp=now,
             total_eligible_images=total_eligible,
             successfully_hashed_images=successfully_hashed,

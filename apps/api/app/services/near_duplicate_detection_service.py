@@ -356,6 +356,7 @@ class NearDuplicateDetectionService:
         return NearDuplicateAnalysisResult(
             dataset_id=dataset.id,
             dataset_name=dataset.name,
+            version_id=dataset.current_version_id,
             analysis_timestamp=now,
             algorithm=algorithm.value,
             hash_size=hash_size,
