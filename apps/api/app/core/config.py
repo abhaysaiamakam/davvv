@@ -6,6 +6,12 @@ from typing import Annotated, List, Optional, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+_DEFAULT_STORAGE_BASE_DIR = (
+    Path("/tmp/croplens-storage")
+    if os.getenv("VERCEL") == "1"
+    else Path(__file__).resolve().parent.parent.parent / "storage_data"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -52,10 +58,13 @@ class Settings(BaseSettings):
 
     # Storage paths (Environment-configurable, default to local directory)
     # The base directory where raw, extracted, and computed data live
+    # Vercel's deployed function bundle is read-only; /tmp is writable scratch
+    # space there. It is intentionally only a startup/runtime fallback because
+    # serverless temporary storage is not durable between function instances.
     STORAGE_BASE_DIR: Path = Path(
         os.getenv(
             "CROPLENS_STORAGE_BASE_DIR",
-            str(Path(__file__).resolve().parent.parent.parent / "storage_data"),
+            str(_DEFAULT_STORAGE_BASE_DIR),
         )
     )
 
