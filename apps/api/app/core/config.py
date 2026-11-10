@@ -1,8 +1,10 @@
 import os
+import json
 from pathlib import Path
-from typing import List, Optional, Union
+from json import JSONDecodeError
+from typing import Annotated, List, Optional, Union
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -21,7 +23,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # CORS configuration
-    CORS_ORIGINS: List[str] = [
+    # Keep environment parsing in our validator: pydantic-settings otherwise
+    # tries JSON decoding before the validator can accept a plain URL/CSV value.
+    CORS_ORIGINS: Annotated[List[str], NoDecode] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
@@ -29,9 +33,20 @@ class Settings(BaseSettings):
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",") if i.strip()]
-        elif isinstance(v, (list, str)):
+        if isinstance(v, str):
+            value = v.strip()
+            if value.startswith("["):
+                try:
+                    parsed = json.loads(value)
+                except JSONDecodeError as exc:
+                    raise ValueError(
+                        "CORS_ORIGINS must be a URL, comma-separated URLs, or a JSON array"
+                    ) from exc
+                if not isinstance(parsed, list):
+                    raise ValueError("CORS_ORIGINS JSON value must be an array")
+                return parsed
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        elif isinstance(v, list):
             return v
         return ["http://localhost:3000", "http://127.0.0.1:3000"]
 
